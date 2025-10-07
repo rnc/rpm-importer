@@ -15,12 +15,10 @@ import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.VERSION;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +27,6 @@ import org.apache.commons.lang.StringUtils;
 import org.commonjava.atlas.maven.ident.ref.SimpleArtifactRef;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.lib.TextProgressMonitor;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logmanager.Level;
 import org.jboss.pnc.api.reqour.dto.TranslateRequest;
@@ -58,7 +55,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import eu.maveniverse.domtrip.Document;
 import eu.maveniverse.domtrip.Element;
-import io.quarkus.logging.Log;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -182,7 +178,7 @@ public class App implements Runnable {
                 log.error("Skipping repository creation but {} is not available internally", internalUrl);
                 throw new RuntimeException("Internal repository does not exist");
             }
-            repository = cloneRepository(internalUrl, branch);
+            repository = Utils.cloneRepository(internalUrl, branch);
         } else {
             log.info("Using existing repository {}", repository);
             try (var jGit = Git.init().setDirectory(repository.toFile()).call()) {
@@ -358,33 +354,6 @@ public class App implements Runnable {
             log.error("Unable to find an artifact from GAV {}", lastMeadBuild.getExtra().getTypeinfo().getMaven());
         }
         return Collections.emptyList();
-    }
-
-    private Path cloneRepository(String url, String branch) {
-        Path path = Utils.createTempDirForCloning();
-        log.info("Using {} for repository", path);
-        StringWriter writer = new StringWriter();
-        TextProgressMonitor monitor = new TextProgressMonitor(writer) {
-            // Don't want percent updates, just final summaries.
-            protected void onUpdate(String taskName, int workCurr, Duration duration) {
-            }
-
-            protected void onUpdate(String taskName, int cmp, int totalWork, int pcnt, Duration duration) {
-            }
-        };
-        monitor.showDuration(true);
-
-        var repoClone = Git.cloneRepository()
-                .setURI(url)
-                .setProgressMonitor(monitor)
-                .setBranch(branch)
-                .setDirectory(path.toFile());
-        try (var ignored = repoClone.call()) {
-            Log.infof("Clone summary:\n%s", writer.toString().replaceAll("(?m)^\\s+", ""));
-        } catch (GitAPIException e) {
-            throw new RuntimeException(e);
-        }
-        return path;
     }
 
     private void setConfigLocation(String configLocation, String source) {

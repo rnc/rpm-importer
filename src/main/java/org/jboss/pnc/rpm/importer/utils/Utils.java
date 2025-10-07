@@ -1,11 +1,20 @@
 package org.jboss.pnc.rpm.importer.utils;
 
 import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.TextProgressMonitor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Utils {
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
     public static Path createTempDirForCloning() {
         return createTempDir("clone-", "cloning");
@@ -51,5 +60,39 @@ public class Utils {
     public static String parseMeadPkgName(Path path) throws IOException {
         String found = Files.readString(Paths.get(path.toString(), "mead-pkg-name")).trim();
         return found.split(" ")[0];
+    }
+
+    /**
+     * Clones a repository to a temporary location.
+     *
+     * @param url The repository to clone
+     * @param branch The branch to switch to.
+     * @return the path of the cloned repository
+     */
+    public static Path cloneRepository(String url, String branch) {
+        Path path = createTempDirForCloning();
+        log.info("Using {} for repository", path);
+        StringWriter writer = new StringWriter();
+        TextProgressMonitor monitor = new TextProgressMonitor(writer) {
+            // Don't want percent updates, just final summaries.
+            protected void onUpdate(String taskName, int workCurr, Duration duration) {
+            }
+
+            protected void onUpdate(String taskName, int cmp, int totalWork, int pcnt, Duration duration) {
+            }
+        };
+        monitor.showDuration(true);
+
+        var repoClone = Git.cloneRepository()
+                .setURI(url)
+                .setProgressMonitor(monitor)
+                .setBranch(branch)
+                .setDirectory(path.toFile());
+        try (var ignored = repoClone.call()) {
+            log.info("Clone summary:\n{}", writer.toString().replaceAll("(?m)^\\s+", ""));
+        } catch (GitAPIException e) {
+            throw new RuntimeException(e);
+        }
+        return path;
     }
 }
