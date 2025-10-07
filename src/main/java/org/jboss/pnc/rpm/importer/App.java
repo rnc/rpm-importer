@@ -1,11 +1,15 @@
-/*
- * Copyright 2024 Red Hat, Inc.
- * SPDX-License-Identifier: Apache-2.0
- */
 package org.jboss.pnc.rpm.importer;
 
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.ARTIFACT_ID;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.CLASSIFIER;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCIES;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCY_MANAGEMENT;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.GROUP_ID;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.NAME;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.PROPERTIES;
+import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.TYPE;
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.VERSION;
 
 import java.io.File;
@@ -17,14 +21,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.commons.lang.StringUtils;
+import org.commonjava.atlas.maven.ident.ref.SimpleArtifactRef;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.TextProgressMonitor;
-import org.eclipse.jgit.transport.sshd.SshdSessionFactory;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.logmanager.Level;
 import org.jboss.pnc.api.reqour.dto.TranslateRequest;
 import org.jboss.pnc.api.reqour.dto.TranslateResponse;
 import org.jboss.pnc.bacon.auth.client.PncClientHelper;
@@ -33,17 +40,24 @@ import org.jboss.pnc.bacon.config.Config;
 import org.jboss.pnc.bacon.config.PncConfig;
 import org.jboss.pnc.bacon.config.ReqourConfig;
 import org.jboss.pnc.client.Configuration;
+import org.jboss.pnc.dto.Artifact;
 import org.jboss.pnc.dto.SCMRepository;
 import org.jboss.pnc.dto.requests.CreateAndSyncSCMRequest;
+import org.jboss.pnc.dto.response.Page;
 import org.jboss.pnc.dto.response.RepositoryCreationResponse;
 import org.jboss.pnc.rpm.importer.clients.OrchService;
 import org.jboss.pnc.rpm.importer.clients.ReqourService;
+import org.jboss.pnc.rpm.importer.model.brew.BuildInfo;
+import org.jboss.pnc.rpm.importer.utils.Brew;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.maveniverse.domtrip.maven.PomEditor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import eu.maveniverse.domtrip.Document;
+import eu.maveniverse.domtrip.Element;
 import io.quarkus.logging.Log;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
@@ -62,15 +76,14 @@ public class App implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @RestClient
     ReqourService reqourService;
 
     @RestClient
     OrchService orchService;
 
-    /**
-     * Set the verbosity of logback if the verbosity flag is set
-     */
     @Option(names = { "-v", "--verbose" }, description = "Verbose output")
     boolean verbose;
 
@@ -98,7 +111,11 @@ public class App implements Runnable {
             names = "--repository",
             description = "Skips cloning and uses existing repository")
     private Path repository;
-    SshdSessionFactory sshSessionFactory;
+
+    @Option(
+            names = "--overwrite",
+            description = "Overwrites existing pom. Dangerous!")
+    private Boolean overwrite = false;
 
     @Override
     public void run() {
@@ -108,20 +125,13 @@ public class App implements Runnable {
         // setting GIT_SSH means it will use native git to communicate.
         // Entered https://github.com/eclipse-jgit/jgit/issues/216 and https://github.com/eclipse-jgit/jgit/issues/215
         if (System.getenv("GIT_SSH") == null) {
-            log.error("Define GIT_SSH=/bin/ssh in the environment.");
-            return;
+            log.warn(
+                    "You may need to define GIT_SSH=/bin/ssh in the environment or ensure the ssh agent is configured with the key and     'IdentitiesOnly yes' for authentication");
         }
 
         if (verbose) {
-            // TODO: NYI
-            throw new RuntimeException("NYI - use -Dquarkus.log.level=DEBUG for now");
-            //            log.warn("### slf4j " + log.getClass().getName());
-            //            ObjectHelper.setRootLoggingLevel(Level.DEBUG);
-            //
-            //            // Add more loggers that you want to switch to DEBUG here
-            //            ObjectHelper.setLoggingLevel("org.jboss.pnc.client", Level.DEBUG);
-            //
-            //            log.debug("Log level set to DEBUG");
+            java.util.logging.Logger.getLogger("org.jboss.pnc.rpm").setLevel(Level.FINE);
+            log.debug("Log level set to DEBUG");
         }
 
         if (configPath != null) {
@@ -131,6 +141,8 @@ public class App implements Runnable {
         } else {
             setConfigLocation(Constant.DEFAULT_CONFIG_FOLDER, "constant");
         }
+        PncConfig pncConfig = Config.instance().getActiveProfile().getPnc();
+        Configuration pncConfiguration = PncClientHelper.getPncConfiguration();
 
         ReqourConfig reqourConfig = Config.instance().getActiveProfile().getReqour();
         TranslateResponse translateResponse = reqourService.external_to_internal(
@@ -141,9 +153,6 @@ public class App implements Runnable {
         String internalUrl = translateResponse.getInternalUrl();
 
         log.info("For external URL {} retrieved internal {}", url, translateResponse.getInternalUrl());
-
-        PncConfig pncConfig = Config.instance().getActiveProfile().getPnc();
-        Configuration pncConfiguration = PncClientHelper.getPncConfiguration();
 
         // We search using the internal URL in case the scm repository hasn't been setup to
         // sync and doesn't have the external URL listed.
@@ -165,7 +174,8 @@ public class App implements Runnable {
             log.warn("### clone service {}", repositoryCreationResponse);
         } else if (skip && internalUrlOpt.isEmpty()) {
             log.error("Skipping repository creation but {} is not available internally", internalUrl);
-            throw new RuntimeException("Internal repository does not exist");
+            //TODO: Should this be an error.
+            //throw new RuntimeException("Internal repository does not exist");
         }
         log.info("Found internalUrl {}", internalUrl);
 
@@ -185,10 +195,31 @@ public class App implements Runnable {
         }
 
         try {
-            String version = parseVersionReleaseSerial(repository);
+            String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
+            BuildInfo lastMeadBuild = MAPPER.readValue(
+                    Brew.getBuildInfo(lastMeadBuildFile),
+                    BuildInfo.class);
+            log.info(
+                    "Found last-mead-build {} with GAV {}:{}:{}",
+                    lastMeadBuildFile,
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion());
+            String version = Utils.parseVersionReleaseSerial(repository);
             log.info("Found version: {}", version);
-            String artifactId = parseMeadPkgName(repository) + "-" + branch;
-            log.info("Setting artifactId to comprise of mead-pkg-name and branch name: {}", artifactId);
+            // We want to ensure the artifact names are completely unique. Unlike in brew if
+            // we build multiple branches they still need to be differentiated.
+            // TODO: Decide on the best way to differentiate. One format ends up as
+            //           org.jboss.pnc.rpm : org.apache.sshd-sshd-jb-eap-7.4-rhel-7
+            //       It might be better to also use the groupId e.g.
+            //           org.jboss.pnc.rpm.org.apache.sshd : sshd-jb-eap-7.4-rhel-7
+            //       Latter needs NVR -> GAV conversion
+            String groupId = "org.jboss.pnc.rpm." + lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId();
+            String artifactId = lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId() + "-" + branch;
+            log.info(
+                    "Setting groupId : artifactId to comprise of scoped groupId and branch name: {}:{}",
+                    groupId,
+                    artifactId);
 
             String source;
             try (InputStream x = App.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
@@ -197,7 +228,7 @@ public class App implements Runnable {
             }
             File target = new File(repository.toFile(), "pom.xml");
 
-            if (target.exists()) {
+            if (target.exists() && !overwrite) {
                 log.error("pom.xml already exists and not overwriting");
                 return;
             }
@@ -208,20 +239,115 @@ public class App implements Runnable {
             // brings in quite a lot.
             Document document = Document.of(target.toPath());
             PomEditor pomEditor = new PomEditor(document);
+            pomEditor.findChildElement(pomEditor.root(), NAME).textContent(Utils.parseMeadPkgName(repository));
+            pomEditor.findChildElement(pomEditor.root(), GROUP_ID).textContent(groupId);
             pomEditor.findChildElement(pomEditor.root(), ARTIFACT_ID).textContent(artifactId);
             pomEditor.findChildElement(pomEditor.root(), VERSION).textContent(version);
             pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), PROPERTIES), "wrappedBuild")
                     .textContent(version);
+            Element depMgmt = pomEditor.findChildElement(pomEditor.root(), DEPENDENCY_MANAGEMENT);
+            Element deps = pomEditor.findChildElement(depMgmt, DEPENDENCIES);
+            pomEditor.addDependency(
+                    deps,
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                    "${wrappedBuild}");
 
-            File target3 = new File(repository.toFile(), "pom-domtrip.xml");
-            Files.writeString(target3.toPath(), pomEditor.toXml());
+            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
+            Element plugins = pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), BUILD), PLUGINS);
+            // findFirst as the template only has one plugin with this artifactId
+            var plugin = plugins.children()
+                    .filter(
+                            element -> pomEditor.findChildElement(element, "artifactId")
+                                    .textContent()
+                                    .equals("maven-dependency-plugin"))
+                    .findFirst();
+            // We know the template is a specific format so don't need to use isPresent.
+            @SuppressWarnings("OptionalGetWithoutIsPresent")
+            Element artifactItems = plugin.get()
+                    .child("executions")
+                    .get()
+                    .child("execution")
+                    .get()
+                    .child("configuration")
+                    .get()
+                    .child("artifactItems")
+                    .get();
+            log.warn("### items are {}", artifactItems);
+
+            dependencies.forEach(artifactRef -> {
+                Element artifactItem = pomEditor.insertMavenElement(artifactItems, "artifactItem");
+                pomEditor.insertMavenElement(artifactItem, GROUP_ID, artifactRef.getGroupId());
+                pomEditor.insertMavenElement(artifactItem, ARTIFACT_ID, artifactRef.getArtifactId());
+                pomEditor.insertMavenElement(artifactItem, VERSION, "${wrappedBuild}");
+                if (StringUtils.isNotEmpty(artifactRef.getClassifier())) {
+                    pomEditor.insertMavenElement(artifactItem, CLASSIFIER, artifactRef.getClassifier());
+                }
+                if (StringUtils.isNotEmpty(artifactRef.getType()) && !artifactRef.getType().equals("jar")) {
+                    pomEditor.insertMavenElement(artifactItem, TYPE, artifactRef.getType());
+                }
+            });
+
+            Files.writeString(target.toPath(), pomEditor.toXml());
 
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    Path cloneRepository(String url, String branch) {
+    List<SimpleArtifactRef> getDependencies(
+            PncConfig pncConfig,
+            Configuration pncConfiguration,
+            BuildInfo lastMeadBuild) {
+        // Unfortunately, this is somewhat heavyweight. We need all the artifacts produced by this
+        // build. I think this is currently only possible by retrieving the artifactId for the GAV,
+        // then the artifact for that Id and finally using the buildId from the previous, retrieve all
+        // built artifacts.
+        var allArtifacts = orchService.getArtifactsFiltered(
+                pncConfig.getUrl(),
+                pncConfiguration.getBearerTokenSupplier().get(),
+                String.format(
+                        "%s:%s:%s:%s",
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                        "pom",
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion()));
+
+        log.warn("### {}", allArtifacts);
+        String artifactId = null;
+        var found = allArtifacts.getContent().stream().findFirst();
+        if (found.isPresent()) {
+            artifactId = found.get().getId();
+            Artifact artifact = orchService.getSpecific(
+                    pncConfig.getUrl(),
+                    pncConfiguration.getBearerTokenSupplier().get(),
+                    artifactId);
+
+            String buildId = artifact.getBuild().getId();
+            log.info(
+                    "For artifact {} found artifactId {} with buildId {}",
+                    lastMeadBuild.getExtra().getTypeinfo().getMaven(),
+                    artifactId,
+                    buildId);
+
+            Page<Artifact> artifacts = orchService.getBuiltArtifacts(
+                    pncConfig.getUrl(),
+                    pncConfiguration.getBearerTokenSupplier().get(),
+                    buildId);
+            var deps = artifacts.getContent()
+                    .stream()
+                    .map(c -> SimpleArtifactRef.parse(c.getIdentifier()))
+                    .sorted()
+                    .toList();
+            log.info("Found dependencies {}", deps);
+            return deps;
+        } else {
+            log.error("Unable to find an artifact from GAV {}", lastMeadBuild.getExtra().getTypeinfo().getMaven());
+        }
+        return Collections.emptyList();
+    }
+
+    private Path cloneRepository(String url, String branch) {
         Path path = Utils.createTempDirForCloning();
         log.info("Using {} for repository", path);
         StringWriter writer = new StringWriter();
@@ -246,40 +372,6 @@ public class App implements Runnable {
             throw new RuntimeException(e);
         }
         return path;
-    }
-
-    /**
-     * The format of the file is
-     *
-     * <pre>
-     * {@code <meadversion> <namedversion> <meadalpha> <meadrel> <serial> <namedversionrel>}
-     * </pre>
-     *
-     * We only want the meadversion.
-     *
-     * @param path the directory where the ETT files are
-     * @return a parsed String version
-     */
-    private String parseVersionReleaseSerial(Path path) throws IOException {
-        String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
-        return found.split(" ")[0];
-    }
-
-    /**
-     * The format of the file is
-     *
-     * <pre>
-     * {@code <pkg> <optionalTag>}
-     * </pre>
-     *
-     * We only want the meadversion.
-     *
-     * @param path the directory where the ETT files are
-     * @return a parsed String version
-     */
-    private String parseMeadPkgName(Path path) throws IOException {
-        String found = Files.readString(Paths.get(path.toString(), "mead-pkg-name")).trim();
-        return found.split(" ")[0];
     }
 
     private void setConfigLocation(String configLocation, String source) {

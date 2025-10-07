@@ -8,10 +8,10 @@ quarkus:
   log:
     category:
       "org.jboss.resteasy.reactive.client.logging":
-        level: DEBUG
+        level: WARN
       "org.jboss.pnc.rpm":
-        level: DEBUG
-      # Avoids "Invalid cookie header" messages from old httpclient from keyclock from bacon.
+        level: INFO
+      # Avoids "Invalid cookie header" messages from old httpclient from keycloak from bacon.
       "org.apache.http.client.protocol":
         level: ERROR
 #    console:
@@ -24,57 +24,3 @@ quarkus:
       url: "https://localhost:8080"
     reqour-service:
       url: "https://localhost:8080"
-
-#reqour:
-#  git:
-#    git-backends:
-#      available:
-#        gitlab:
-#          hostname: localhost
-#          username: test-user
-#          workspace: test-workspace
-#          workspace-id: 1
-#          token: I don't even need to be real
-#          git-url-internal-template: git@localhost:${reqour.git.git-backends.available.gitlab.workspace}
-#          read-only-template: http://${reqour.git.git-backends.available.gitlab.hostname}/${reqour.git.git-backends.available.gitlab.workspace}/%s.git
-#          read-write-template: git@${reqour.git.git-backends.available.gitlab.hostname}:${reqour.git.git-backends.available.gitlab.workspace}/%s.git
-#          protected-tags-pattern: '*'
-#          protected-tags-accepted-patterns:
-#      active: gitlab
-#    acceptable-schemes:
-#      - https
-#      - http
-#      - git
-#      - git+ssh
-#      - ssh
-##    private-github-user: test-bot
-#    user:
-#      email: test-user@example.com
-#      name: ReqourTest
-
-
-#    handler:
-#      kafka:
-#        enabled: false  # enabled and fully configured in runtime config
-#        broker-list: kafka.example.com:443
-#        topic: kafka-topic
-
-#reqour:
-#  git:
-#    git-backends:
-#      available:
-#        gitlab:
-#          url: https://${reqour.git.git-backends.available.gitlab.hostname}
-#          git-url-internal-template: git@${reqour.git.git-backends.available.gitlab.hostname}:${reqour.git.git-backends.available.gitlab.workspace}
-#          read-only-template: https://${reqour.git.git-backends.available.gitlab.hostname}/${reqour.git.git-backends.available.gitlab.workspace}/%s.git
-#          read-write-template: git@${reqour.git.git-backends.available.gitlab.hostname}:${reqour.git.git-backends.available.gitlab.workspace}/%s.git
-#          token: ${GITLAB_TOKEN}
-#    internal-urls: []  # overridden in runtime config
-#    private-github-user: ${PRIVATE_GITHUB_USER}
-#  log:
-#    final-log:
-#      bifrost-uploader:
-#        base-url: ${BIFROST_URL}
-#      uploader-base-name: 'org.jboss.pnc._userlog_.alignment-log'
-#    user-log:
-#      user-logger-name: 'org.jboss.pnc._userlog_.alignment-log'

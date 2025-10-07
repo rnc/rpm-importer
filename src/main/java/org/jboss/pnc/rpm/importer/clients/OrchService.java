@@ -1,10 +1,8 @@
-/*
- * Copyright 2024 Red Hat, Inc.
- * SPDX-License-Identifier: Apache-2.0
- */
 package org.jboss.pnc.rpm.importer.clients;
 
 import static org.jboss.pnc.rest.configuration.SwaggerConstants.MATCH_QUERY_PARAM;
+
+import javax.ws.rs.PathParam;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.Consumes;
@@ -17,8 +15,10 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.pnc.dto.Artifact;
 import org.jboss.pnc.dto.SCMRepository;
 import org.jboss.pnc.dto.requests.CreateAndSyncSCMRequest;
+import org.jboss.pnc.dto.response.ArtifactInfo;
 import org.jboss.pnc.dto.response.Page;
 import org.jboss.pnc.dto.response.RepositoryCreationResponse;
 
@@ -52,4 +52,27 @@ public interface OrchService {
             @HeaderParam("Authorization") String accessToken,
             @QueryParam(MATCH_QUERY_PARAM) String matchUrl);
 
+    @Path("/artifacts/filter")
+    @Produces(MediaType.APPLICATION_JSON)
+    @GET
+    Page<ArtifactInfo> getArtifactsFiltered(
+            @Url String url,
+            @HeaderParam("Authorization") String accessToken,
+            @QueryParam("identifier") String identifier);
+
+    @Path("/artifacts/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    @GET
+    Artifact getSpecific(
+            @Url String url,
+            @HeaderParam("Authorization") String accessToken,
+            @PathParam("id") String id);
+
+    @Path("/builds/{id}/artifacts/built")
+    @Produces(MediaType.APPLICATION_JSON)
+    @GET
+    Page<Artifact> getBuiltArtifacts(
+            @Url String url,
+            @HeaderParam("Authorization") String accessToken,
+            @PathParam("id") String id);
 }
