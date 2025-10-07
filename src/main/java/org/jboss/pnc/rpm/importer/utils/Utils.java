@@ -26,14 +26,14 @@ public class Utils {
      * {@code <meadversion> <namedversion> <meadalpha> <meadrel> <serial> <namedversionrel>}
      * </pre>
      *
-     * We only want the meadversion.
+     * We only want the namedversion.
      *
      * @param path the directory where the ETT files are
-     * @return a parsed String version
+     * @return a parsed String RH version
      */
     public static String parseVersionReleaseSerial(Path path) throws IOException {
         String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
-        return found.split(" ")[0];
+        return found.split(" ")[1];
     }
 
     /**

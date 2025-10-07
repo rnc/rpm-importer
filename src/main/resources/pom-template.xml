@@ -3,20 +3,15 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.jboss.pnc.rpm</groupId>
-    <artifactId>x</artifactId> <!-- used as package name -->
-    <version>0</version> <!-- used as version -->
+    <artifactId>x</artifactId>
+    <version>0</version>
     <packaging>spec</packaging>
 
-    <name></name> <!-- used for "summary" field -->
-
-    <!-- used for "description" field -->
-    <description>
-    </description>
-    <url></url> <!-- used for URL field -->
+    <name></name>
 
     <organization>
-        <name>Red Hat, Inc. &lt;http://bugzilla.redhat.com/bugzilla&gt;</name>
-        <url>Red Hat, Inc.</url>
+        <name>Red Hat, Inc.</name>
+        <url>https://www.redhat.com/</url>
     </organization>
 
     <properties>
@@ -63,7 +58,8 @@
                 <extensions>true</extensions>
                 <configuration>
                     <macros>
-                        <dist>.el7eap</dist>
+                        <!-- Insert macros to be used at RPM build time e.g. -->
+                        <!-- <dist>.el7eap</dist> -->
                     </macros>
                     <changeLog>
                         <generate>true</generate>
@@ -74,6 +70,7 @@
                         def spec = new File("${project.build.directory}/spec/apache-sshd.spec")
                         def contents = spec.getText('UTF-8')
 
+                        // Spec Manipulation Example:
                         // Apache-SSH source hack to ensure subdirectory creation is correctly named.
                         // contents = contents.replaceAll("%setup -q -n sshd-", "%setup -q -n apache-sshd-")
 
@@ -86,7 +83,7 @@
                         %define maven_version ${wrappedBuild}
 
                         %if %with mead
-                        Source100: sshd-${wrappedBuild}-project-sources.zip
+                        Source100:
                         %endif
 
                         """ + contents

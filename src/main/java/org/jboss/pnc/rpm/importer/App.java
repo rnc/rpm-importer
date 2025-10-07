@@ -103,35 +103,41 @@ public class App implements Runnable {
     private String branch;
 
     @Option(
-            names = "--skip-sync",
-            description = "Skips any syncing and only clones the repository and performs the patching")
-    private Boolean skip;
-
-    @Option(
             names = "--repository",
             description = "Skips cloning and uses existing repository")
     private Path repository;
+
+    @Option(
+            names = "--skip-sync",
+            description = "Skips any syncing and only clones the repository and performs the patching")
+    private Boolean skip;
 
     @Option(
             names = "--overwrite",
             description = "Overwrites existing pom. Dangerous!")
     private Boolean overwrite = false;
 
+    // TODO: Should we create an option to pass in a set of macros.
+
     @Override
     public void run() {
+        if (verbose) {
+            java.util.logging.Logger.getLogger("org.jboss.pnc.rpm").setLevel(Level.FINE);
+            log.debug("Log level set to DEBUG");
+        }
+        if (StringUtils.isEmpty(branch)) {
+            log.warn("No branch specified; unable to proceed");
+            return;
+        }
         // This is not ideal - while there should be native java transports to use
         // the ssh agent I couldn't get them to work. According to
         // https://gerrit.googlesource.com/jgit/+/refs/heads/servlet-4/org.eclipse.jgit.ssh.apache/README.md
         // setting GIT_SSH means it will use native git to communicate.
         // Entered https://github.com/eclipse-jgit/jgit/issues/216 and https://github.com/eclipse-jgit/jgit/issues/215
         if (System.getenv("GIT_SSH") == null) {
-            log.warn(
-                    "You may need to define GIT_SSH=/bin/ssh in the environment or ensure the ssh agent is configured with the key and     'IdentitiesOnly yes' for authentication");
-        }
-
-        if (verbose) {
-            java.util.logging.Logger.getLogger("org.jboss.pnc.rpm").setLevel(Level.FINE);
-            log.debug("Log level set to DEBUG");
+            log.debug(
+                    """
+                            You may need to define GIT_SSH=/bin/ssh in the environment or ensure the ssh agent is configured with the key and 'IdentitiesOnly yes' for authentication""");
         }
 
         if (configPath != null) {
@@ -152,38 +158,30 @@ public class App implements Runnable {
         RepositoryCreationResponse repositoryCreationResponse;
         String internalUrl = translateResponse.getInternalUrl();
 
-        log.info("For external URL {} retrieved internal {}", url, translateResponse.getInternalUrl());
+        log.info("For external URL {} retrieved internal {}", url, internalUrl);
 
-        // We search using the internal URL in case the scm repository hasn't been setup to
-        // sync and doesn't have the external URL listed.
-        var response = orchService.getAll(
-                pncConfig.getUrl(),
-                pncConfiguration.getBearerTokenSupplier().get(),
-                internalUrl);
-        Optional<SCMRepository> internalUrlOpt = response.getContent().stream().findFirst();
-
-        // If present, the repository is already synced to internal.
-        if (!skip && internalUrlOpt.isEmpty()) {
-            CreateAndSyncSCMRequest createAndSyncSCMRequest = CreateAndSyncSCMRequest.builder().scmUrl(url).build();
-            log.warn("### Invoking clone service with {}", createAndSyncSCMRequest);
-            repositoryCreationResponse = orchService
-                    .createNew(
-                            pncConfig.getUrl(),
-                            "Bearer " + pncConfiguration.getBearerTokenSupplier().get(),
-                            createAndSyncSCMRequest);
-            log.warn("### clone service {}", repositoryCreationResponse);
-        } else if (skip && internalUrlOpt.isEmpty()) {
-            log.error("Skipping repository creation but {} is not available internally", internalUrl);
-            //TODO: Should this be an error.
-            //throw new RuntimeException("Internal repository does not exist");
-        }
-        log.info("Found internalUrl {}", internalUrl);
-
-        if (StringUtils.isEmpty(branch)) {
-            log.warn("No branch specified; unable to proceed");
-            return;
-        }
         if (repository == null) {
+            // We search using the internal URL in case the scm repository hasn't been setup to
+            // sync and doesn't have the external URL listed.
+            var response = orchService.getAll(
+                    pncConfig.getUrl(),
+                    pncConfiguration.getBearerTokenSupplier().get(),
+                    internalUrl);
+            Optional<SCMRepository> internalUrlOpt = response.getContent().stream().findFirst();
+
+            // If present, the repository is already synced to internal.
+            if (!skip && internalUrlOpt.isEmpty()) {
+                CreateAndSyncSCMRequest createAndSyncSCMRequest = CreateAndSyncSCMRequest.builder().scmUrl(url).build();
+                repositoryCreationResponse = orchService
+                        .createNew(
+                                pncConfig.getUrl(),
+                                "Bearer " + pncConfiguration.getBearerTokenSupplier().get(),
+                                createAndSyncSCMRequest);
+                log.warn("### clone service {}", repositoryCreationResponse);
+            } else if (skip && internalUrlOpt.isEmpty()) {
+                log.error("Skipping repository creation but {} is not available internally", internalUrl);
+                throw new RuntimeException("Internal repository does not exist");
+            }
             repository = cloneRepository(internalUrl, branch);
         } else {
             log.info("Using existing repository {}", repository);
@@ -220,29 +218,48 @@ public class App implements Runnable {
                     "Setting groupId : artifactId to comprise of scoped groupId and branch name: {}:{}",
                     groupId,
                     artifactId);
+            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
 
             String source;
             try (InputStream x = App.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
                 assert x != null;
                 source = new String(x.readAllBytes(), StandardCharsets.UTF_8);
             }
-            File target = new File(repository.toFile(), "pom.xml");
 
+            // Replace the Source100 marker in the template. Easier to do via string replace rather than
+            // searching for the element.
+            Optional<SimpleArtifactRef> projectSources = dependencies.stream()
+                    .filter(a -> "project-sources".equals(a.getClassifier()))
+                    .findFirst();
+            if (projectSources.isPresent()) {
+                // e.g. Source100: sshd-2.14.0.redhat-00002-project-sources.tar.gz
+                source = source.replaceAll(
+                        "Source100:",
+                        "Source100: " + projectSources.get().getArtifactId() + "-" +
+                                projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
+                                + "." + projectSources.get().getType());
+            } else {
+                log.warn(
+                        "Unable to find artifact with project-sources classifier to substitute Source100 marker in spec file.");
+            }
+
+            File target = new File(repository.toFile(), "pom.xml");
             if (target.exists() && !overwrite) {
                 log.error("pom.xml already exists and not overwriting");
                 return;
             }
-            Files.writeString(target.toPath(), source);
 
             // Using https://github.com/maveniverse/domtrip as Maven MavenXpp3Reader/Writer
             // does not preserve comments. Another alternative would be PME POMIO but that
             // brings in quite a lot.
-            Document document = Document.of(target.toPath());
+            Document document = Document.of(source);
             PomEditor pomEditor = new PomEditor(document);
             pomEditor.findChildElement(pomEditor.root(), NAME).textContent(Utils.parseMeadPkgName(repository));
             pomEditor.findChildElement(pomEditor.root(), GROUP_ID).textContent(groupId);
             pomEditor.findChildElement(pomEditor.root(), ARTIFACT_ID).textContent(artifactId);
-            pomEditor.findChildElement(pomEditor.root(), VERSION).textContent(version);
+            // TODO: Should we have the RPM build match the version of the wrapped build? It bears
+            //     no relation so I think should be distinct.
+            pomEditor.findChildElement(pomEditor.root(), VERSION).textContent("1.0.0");
             pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), PROPERTIES), "wrappedBuild")
                     .textContent(version);
             Element depMgmt = pomEditor.findChildElement(pomEditor.root(), DEPENDENCY_MANAGEMENT);
@@ -253,7 +270,6 @@ public class App implements Runnable {
                     lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
                     "${wrappedBuild}");
 
-            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
             Element plugins = pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), BUILD), PLUGINS);
             // findFirst as the template only has one plugin with this artifactId
             var plugin = plugins.children()
@@ -273,7 +289,6 @@ public class App implements Runnable {
                     .get()
                     .child("artifactItems")
                     .get();
-            log.warn("### items are {}", artifactItems);
 
             dependencies.forEach(artifactRef -> {
                 Element artifactItem = pomEditor.insertMavenElement(artifactItems, "artifactItem");
@@ -313,11 +328,9 @@ public class App implements Runnable {
                         "pom",
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion()));
 
-        log.warn("### {}", allArtifacts);
-        String artifactId = null;
         var found = allArtifacts.getContent().stream().findFirst();
         if (found.isPresent()) {
-            artifactId = found.get().getId();
+            String artifactId = found.get().getId();
             Artifact artifact = orchService.getSpecific(
                     pncConfig.getUrl(),
                     pncConfiguration.getBearerTokenSupplier().get(),
