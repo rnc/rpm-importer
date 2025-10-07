@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.jboss</groupId>
         <artifactId>jboss-parent</artifactId>
-        <version>48</version>
+        <version>49</version>
     </parent>
 
     <groupId>org.jboss.pnc</groupId>
@@ -46,6 +46,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
+        <jboss.releases.repo.id>central</jboss.releases.repo.id>
+        <jboss.releases.repo.url>https://ossrh-staging-api.central.sonatype.com/service/local/</jboss.releases.repo.url>
+        <jboss.snapshots.repo.id>central</jboss.snapshots.repo.id>
+        <jboss.snapshots.repo.url>https://central.sonatype.com/repository/maven-snapshots</jboss.snapshots.repo.url>
+
         <bacon.version>3.3.1-SNAPSHOT</bacon.version>
         <eclipse.version>7.3.0.202506031305-r</eclipse.version>
 
@@ -58,6 +63,16 @@
 
     <!-- Other PNC code doesn't deploy to Sonatype Snapshots -->
     <repositories>
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
         <repository>
             <id>jboss-snapshots-repository</id>
             <name>JBoss Snapshots Repository</name>
