@@ -73,6 +73,47 @@ public class Utils {
         Path path = createTempDirForCloning();
         log.info("Using {} for repository", path);
         StringWriter writer = new StringWriter();
+        var repoClone = Git.cloneRepository()
+                .setURI(url)
+                .setProgressMonitor(getMonitor(writer))
+                .setBranch(branch)
+                .setDirectory(path.toFile());
+        try (var ignored = repoClone.call()) {
+            log.info("Clone summary:\n{}", writer.toString().replaceAll("(?m)^\\s+", ""));
+        } catch (GitAPIException e) {
+            throw new RuntimeException(e);
+        }
+        return path;
+    }
+
+    /**
+     * Commits the pom.xml to the repository and optionally pushes it.
+     *
+     * @param repository the path to the repository.
+     * @param skipPush whether to push or not.
+     */
+    public static void commitAndPushRepository(Path repository, boolean skipPush) {
+        try (var jGit = Git.init().setDirectory(repository.toFile()).call()) {
+            jGit.add().addFilepattern("pom.xml").call();
+
+            var revCommit = jGit.commit()
+                    .setNoVerify(true)
+                    .setAuthor("ProjectNCL", "")
+                    .setMessage("RPM-Importer - POM Generation")
+                    .call();
+            log.info("Added and committed pom.xml ({})", revCommit.getName());
+
+            if (!skipPush) {
+                StringWriter writer = new StringWriter();
+                jGit.push().setProgressMonitor(getMonitor(writer)).call();
+                log.info("Push summary:\n{}", writer.toString().replaceAll("(?m)^\\s+", ""));
+            }
+        } catch (GitAPIException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static TextProgressMonitor getMonitor(StringWriter writer) {
         TextProgressMonitor monitor = new TextProgressMonitor(writer) {
             // Don't want percent updates, just final summaries.
             protected void onUpdate(String taskName, int workCurr, Duration duration) {
@@ -82,17 +123,6 @@ public class Utils {
             }
         };
         monitor.showDuration(true);
-
-        var repoClone = Git.cloneRepository()
-                .setURI(url)
-                .setProgressMonitor(monitor)
-                .setBranch(branch)
-                .setDirectory(path.toFile());
-        try (var ignored = repoClone.call()) {
-            log.info("Clone summary:\n{}", writer.toString().replaceAll("(?m)^\\s+", ""));
-        } catch (GitAPIException e) {
-            throw new RuntimeException(e);
-        }
-        return path;
+        return monitor;
     }
 }

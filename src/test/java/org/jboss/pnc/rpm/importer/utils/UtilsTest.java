@@ -3,6 +3,7 @@ package org.jboss.pnc.rpm.importer.utils;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.logging.LogRecord;
@@ -36,5 +37,20 @@ class UtilsTest {
         assertTrue(result.toFile().exists());
         assertTrue(new File(result.toString(), "README.md").exists());
         assertTrue(logRecords.stream().anyMatch(r -> LogCollectingTestResource.format(r).contains("Clone summary")));
+    }
+
+
+    @Test
+    void testCommit() throws IOException {
+        Path result = Utils.cloneRepository("https://github.com/project-ncl/rpm-importer.git", "main");
+
+        File pom = new File(result.toString(), "pom.xml");
+        pom.createNewFile();
+
+        Utils.commitAndPushRepository(result, true);
+
+        List<LogRecord> logRecords = LogCollectingTestResource.current().getRecords();
+
+        assertTrue(logRecords.stream().anyMatch(r -> LogCollectingTestResource.format(r).contains("Added and committed pom.xml")));
     }
 }

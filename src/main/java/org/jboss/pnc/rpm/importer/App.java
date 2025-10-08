@@ -86,9 +86,6 @@ public class App implements Runnable {
     @Option(names = "--profile", description = "PNC Configuration profile")
     private String profile = "default";
 
-    /**
-     * Set the path to config file if the configPath flag or environment variable is set
-     */
     @Option(names = { "-p", "--configPath" }, description = "Path to PNC configuration folder")
     private String configPath = null;
 
@@ -106,12 +103,17 @@ public class App implements Runnable {
     @Option(
             names = "--skip-sync",
             description = "Skips any syncing and only clones the repository and performs the patching")
-    private Boolean skip;
+    private boolean skipSync;
 
     @Option(
             names = "--overwrite",
             description = "Overwrites existing pom. Dangerous!")
-    private Boolean overwrite = false;
+    private boolean overwrite;
+
+    @Option(
+            names = "--skip-push",
+            description = "Skips pushing changes to the remote repository. Will still commit")
+    private boolean skipPush;
 
     // TODO: Should we create an option to pass in a set of macros.
 
@@ -124,16 +126,6 @@ public class App implements Runnable {
         if (StringUtils.isEmpty(branch)) {
             log.warn("No branch specified; unable to proceed");
             return;
-        }
-        // This is not ideal - while there should be native java transports to use
-        // the ssh agent I couldn't get them to work. According to
-        // https://gerrit.googlesource.com/jgit/+/refs/heads/servlet-4/org.eclipse.jgit.ssh.apache/README.md
-        // setting GIT_SSH means it will use native git to communicate.
-        // Entered https://github.com/eclipse-jgit/jgit/issues/216 and https://github.com/eclipse-jgit/jgit/issues/215
-        if (System.getenv("GIT_SSH") == null) {
-            log.debug(
-                    """
-                            You may need to define GIT_SSH=/bin/ssh in the environment or ensure the ssh agent is configured with the key and 'IdentitiesOnly yes' for authentication""");
         }
 
         if (configPath != null) {
@@ -164,17 +156,17 @@ public class App implements Runnable {
                     pncConfiguration.getBearerTokenSupplier().get(),
                     internalUrl);
             Optional<SCMRepository> internalUrlOpt = response.getContent().stream().findFirst();
+            log.info("Retrieved from pnc repository information: {}", internalUrlOpt.orElse(null));
 
             // If present, the repository is already synced to internal.
-            if (!skip && internalUrlOpt.isEmpty()) {
+            if (!skipSync && internalUrlOpt.isEmpty()) {
                 CreateAndSyncSCMRequest createAndSyncSCMRequest = CreateAndSyncSCMRequest.builder().scmUrl(url).build();
                 repositoryCreationResponse = orchService
                         .createNew(
                                 pncConfig.getUrl(),
                                 "Bearer " + pncConfiguration.getBearerTokenSupplier().get(),
                                 createAndSyncSCMRequest);
-                log.warn("### clone service {}", repositoryCreationResponse);
-            } else if (skip && internalUrlOpt.isEmpty()) {
+            } else if (skipSync && internalUrlOpt.isEmpty()) {
                 log.error("Skipping repository creation but {} is not available internally", internalUrl);
                 throw new RuntimeException("Internal repository does not exist");
             }
@@ -189,6 +181,8 @@ public class App implements Runnable {
         }
 
         try {
+            // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
+            // brew we can obtain the GAV from the NVR.
             String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
             BuildInfo lastMeadBuild = MAPPER.readValue(
                     Brew.getBuildInfo(lastMeadBuildFile),
@@ -203,9 +197,9 @@ public class App implements Runnable {
             log.info("Found version: {}", version);
             // We want to ensure the artifact names are completely unique. Unlike in brew if
             // we build multiple branches they still need to be differentiated.
-            // TODO: Decide on the best way to differentiate. One format ends up as
+            // TODO: Decide on the best way to differentiate. One option ends up as
             //           org.jboss.pnc.rpm : org.apache.sshd-sshd-jb-eap-7.4-rhel-7
-            //       It might be better to also use the groupId e.g.
+            //       Another (currently chosen) also uses the groupId e.g.
             //           org.jboss.pnc.rpm.org.apache.sshd : sshd-jb-eap-7.4-rhel-7
             //       Latter needs NVR -> GAV conversion
             String groupId = "org.jboss.pnc.rpm." + lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId();
@@ -228,12 +222,14 @@ public class App implements Runnable {
                     .filter(a -> "project-sources".equals(a.getClassifier()))
                     .findFirst();
             if (projectSources.isPresent()) {
+                String projectSourcesInjection = projectSources.get().getArtifactId() + "-" +
+                        projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
+                        + "." + projectSources.get().getType();
+                log.info("Injecting under Source100 marker project sources: {}", projectSourcesInjection);
                 // e.g. Source100: sshd-2.14.0.redhat-00002-project-sources.tar.gz
                 source = source.replaceAll(
                         "Source100:",
-                        "Source100: " + projectSources.get().getArtifactId() + "-" +
-                                projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
-                                + "." + projectSources.get().getType());
+                        "Source100: " + projectSourcesInjection);
             } else {
                 log.warn(
                         "Unable to find artifact with project-sources classifier to substitute Source100 marker in spec file.");
@@ -301,6 +297,8 @@ public class App implements Runnable {
 
             Files.writeString(target.toPath(), pomEditor.toXml());
 
+            Utils.commitAndPushRepository(repository, skipPush);
+
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -351,6 +349,7 @@ public class App implements Runnable {
             log.info("Found dependencies {}", deps);
             return deps;
         } else {
+            // TODO: Should this be an error? This would imply there is no existing build in PNC to be wrapped.
             log.error("Unable to find an artifact from GAV {}", lastMeadBuild.getExtra().getTypeinfo().getMaven());
         }
         return Collections.emptyList();
