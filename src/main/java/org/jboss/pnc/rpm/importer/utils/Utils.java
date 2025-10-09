@@ -13,6 +13,8 @@ import org.eclipse.jgit.lib.TextProgressMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.smallrye.common.process.ProcessBuilder;
+
 public class Utils {
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -90,9 +92,9 @@ public class Utils {
      * Commits the pom.xml to the repository and optionally pushes it.
      *
      * @param repository the path to the repository.
-     * @param skipPush whether to push or not.
+     * @param push whether to push changes to external repository
      */
-    public static void commitAndPushRepository(Path repository, boolean skipPush) {
+    public static void commitAndPushRepository(Path repository, boolean push) {
         try (var jGit = Git.init().setDirectory(repository.toFile()).call()) {
             jGit.add().addFilepattern("pom.xml").call();
 
@@ -103,7 +105,7 @@ public class Utils {
                     .call();
             log.info("Added and committed pom.xml ({})", revCommit.getName());
 
-            if (!skipPush) {
+            if (push) {
                 StringWriter writer = new StringWriter();
                 jGit.push().setProgressMonitor(getMonitor(writer)).call();
                 log.info("Push summary:\n{}", writer.toString().replaceAll("(?m)^\\s+", ""));
@@ -111,6 +113,38 @@ public class Utils {
         } catch (GitAPIException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Verifies whether a remote repository and branch exist
+     *
+     * @param url the repository
+     * @param branch the branch
+     * @return true if it exists, false otherwise
+     */
+    public static boolean checkForRemoteRepositoryAndBranch(String url, String branch) {
+        var holder = new Object() {
+            int exitCode;
+        };
+        ProcessBuilder.newBuilder("git")
+                .arguments(
+                        "ls-remote",
+                        "--exit-code",
+                        "--heads",
+                        url,
+                        branch)
+                .output()
+                .gatherOnFail(false)
+                .discard()
+                .error()
+                .gatherOnFail(false)
+                .discard()
+                .exitCodeChecker(ec -> {
+                    holder.exitCode = ec;
+                    return true;
+                })
+                .run();
+        return holder.exitCode == 0;
     }
 
     private static TextProgressMonitor getMonitor(StringWriter writer) {

@@ -111,9 +111,9 @@ public class App implements Runnable {
     private boolean overwrite;
 
     @Option(
-            names = "--skip-push",
-            description = "Skips pushing changes to the remote repository. Will still commit")
-    private boolean skipPush;
+            names = "--push",
+            description = "Pushes changes to the remote repository. Will still commit")
+    private boolean push;
 
     // TODO: Should we create an option to pass in a set of macros.
 
@@ -151,11 +151,10 @@ public class App implements Runnable {
         if (repository == null) {
             // We search using the internal URL in case the scm repository hasn't been setup to
             // sync and doesn't have the external URL listed.
-            var response = orchService.getAll(
+            Optional<SCMRepository> internalUrlOpt = (orchService.getAll(
                     pncConfig.getUrl(),
                     pncConfiguration.getBearerTokenSupplier().get(),
-                    internalUrl);
-            Optional<SCMRepository> internalUrlOpt = response.getContent().stream().findFirst();
+                    internalUrl)).getContent().stream().findFirst();
             log.info("Retrieved from pnc repository information: {}", internalUrlOpt.orElse(null));
 
             // If present, the repository is already synced to internal.
@@ -166,6 +165,19 @@ public class App implements Runnable {
                                 pncConfig.getUrl(),
                                 "Bearer " + pncConfiguration.getBearerTokenSupplier().get(),
                                 createAndSyncSCMRequest);
+                if (repositoryCreationResponse.getTaskId() != null) {
+                    log.info("Looping until sync is complete");
+                    for (int i = 0; i < 5; i++) {
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                        if (Utils.checkForRemoteRepositoryAndBranch(internalUrl, branch)) {
+                            break;
+                        }
+                    }
+                }
             } else if (skipSync && internalUrlOpt.isEmpty()) {
                 log.error("Skipping repository creation but {} is not available internally", internalUrl);
                 throw new RuntimeException("Internal repository does not exist");
@@ -297,7 +309,7 @@ public class App implements Runnable {
 
             Files.writeString(target.toPath(), pomEditor.toXml());
 
-            Utils.commitAndPushRepository(repository, skipPush);
+            Utils.commitAndPushRepository(repository, push);
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -325,11 +337,17 @@ public class App implements Runnable {
         var found = allArtifacts.getContent().stream().findFirst();
         if (found.isPresent()) {
             String artifactId = found.get().getId();
+            log.info("Retrieved artifact {}", artifactId);
             Artifact artifact = orchService.getSpecific(
                     pncConfig.getUrl(),
                     pncConfiguration.getBearerTokenSupplier().get(),
                     artifactId);
 
+            if (artifact.getBuild() == null) {
+                // Likely an import
+                log.error("Unable to find build information for artifact (Import: {})", artifact.getImportDate());
+                return Collections.emptyList();
+            }
             String buildId = artifact.getBuild().getId();
             log.info(
                     "For artifact {} found artifactId {} with buildId {}",

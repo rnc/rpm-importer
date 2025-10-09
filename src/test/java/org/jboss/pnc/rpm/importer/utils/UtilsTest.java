@@ -39,7 +39,6 @@ class UtilsTest {
         assertTrue(logRecords.stream().anyMatch(r -> LogCollectingTestResource.format(r).contains("Clone summary")));
     }
 
-
     @Test
     void testCommit() throws IOException {
         Path result = Utils.cloneRepository("https://github.com/project-ncl/rpm-importer.git", "main");
@@ -47,10 +46,21 @@ class UtilsTest {
         File pom = new File(result.toString(), "pom.xml");
         pom.createNewFile();
 
-        Utils.commitAndPushRepository(result, true);
+        Utils.commitAndPushRepository(result, false);
 
         List<LogRecord> logRecords = LogCollectingTestResource.current().getRecords();
 
-        assertTrue(logRecords.stream().anyMatch(r -> LogCollectingTestResource.format(r).contains("Added and committed pom.xml")));
+        assertTrue(
+                logRecords.stream()
+                        .anyMatch(r -> LogCollectingTestResource.format(r).contains("Added and committed pom.xml")));
+    }
+
+    @Test
+    void testRemoteCheck() {
+        String url = "https://github.com/project-ncl/rpm-importer.git";
+
+        assertTrue(Utils.checkForRemoteRepositoryAndBranch(url, "main"));
+        assertFalse(Utils.checkForRemoteRepositoryAndBranch(url, "main-INVALID"));
+        assertFalse(Utils.checkForRemoteRepositoryAndBranch(url + "-INVALID", "main"));
     }
 }
