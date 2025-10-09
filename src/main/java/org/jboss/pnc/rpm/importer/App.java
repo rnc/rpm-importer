@@ -67,6 +67,7 @@ import picocli.CommandLine.Option;
         name = "rpm-importer",
         description = "",
         mixinStandardHelpOptions = true,
+        usageHelpWidth = 160,
         versionProvider = VersionProvider.class)
 public class App implements Runnable {
 
