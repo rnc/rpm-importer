@@ -54,7 +54,7 @@ public class Utils {
      * {@code <pkg> <optionalTag>}
      * </pre>
      *
-     * We only want the meadversion.
+     * We only want the mead package.
      *
      * @param path the directory where the ETT files are
      * @return a parsed String version

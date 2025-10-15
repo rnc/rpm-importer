@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.apache.commons.lang.StringUtils;
 import org.commonjava.atlas.maven.ident.ref.SimpleArtifactRef;
@@ -138,8 +139,15 @@ public class App implements Runnable {
         }
         PncConfig pncConfig = Config.instance().getActiveProfile().getPnc();
         Configuration pncConfiguration = PncClientHelper.getPncConfiguration();
-
         ReqourConfig reqourConfig = Config.instance().getActiveProfile().getReqour();
+        if (reqourConfig == null) {
+            log.error("""
+                    Configure reqour within the Bacon config file i.e.:
+                      reqour:
+                         url: "https://reqour.pnc.<as other URLS...>"
+                    """);
+            throw new RuntimeException("No reqour configuration found.");
+        }
         TranslateResponse translateResponse = reqourService.external_to_internal(
                 reqourConfig.getUrl(),
                 TranslateRequest.builder().externalUrl(url).build());
@@ -229,8 +237,20 @@ public class App implements Runnable {
                 source = new String(x.readAllBytes(), StandardCharsets.UTF_8);
             }
 
-            // Replace the Source100 marker in the template. Easier to do via string replace rather than
-            // searching for the element.
+            // Replace the "template.spec" marker in the template. Easier to do via
+            // string replace.
+            try (Stream<Path> stream = Files.walk(repository, 1)) {
+                var r = stream.filter(m -> m.toFile().getName().endsWith(".spec")).toList();
+                if (r.size() > 1) {
+                    log.error("Multiple spec files found: {}", r);
+                } else {
+                    log.info("Replacing template.spec marker with: {}", r.getFirst().toFile().getName());
+                    source = source.replaceAll("template.spec", r.getFirst().toFile().getName());
+                }
+            }
+
+            // Replace the Source100 marker in the template. Easier to do via string
+            // replace rather than searching for the element.
             Optional<SimpleArtifactRef> projectSources = dependencies.stream()
                     .filter(a -> "project-sources".equals(a.getClassifier()))
                     .findFirst();
