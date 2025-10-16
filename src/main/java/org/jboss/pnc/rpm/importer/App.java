@@ -1,5 +1,6 @@
 package org.jboss.pnc.rpm.importer;
 
+import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.ARTIFACT_ID;
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
 import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.CLASSIFIER;
@@ -46,6 +47,7 @@ import org.jboss.pnc.dto.response.RepositoryCreationResponse;
 import org.jboss.pnc.rpm.importer.clients.OrchService;
 import org.jboss.pnc.rpm.importer.clients.ReqourService;
 import org.jboss.pnc.rpm.importer.model.brew.BuildInfo;
+import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
 import org.jboss.pnc.rpm.importer.utils.Brew;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.maveniverse.domtrip.maven.PomEditor;
@@ -231,6 +233,10 @@ public class App implements Runnable {
                     artifactId);
             List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
 
+            TagInfo tagInfo = MAPPER.readValue(
+                    Brew.getTagInfo(branch + "-build"),
+                    TagInfo.class);
+
             String source;
             try (InputStream x = App.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
                 assert x != null;
@@ -327,6 +333,26 @@ public class App implements Runnable {
                     pomEditor.insertMavenElement(artifactItem, TYPE, artifactRef.getType());
                 }
             });
+
+            // findFirst as the template only has one plugin with this artifactId
+            plugin = plugins.children()
+                    .filter(
+                            element -> pomEditor.findChildElement(element, "artifactId")
+                                    .textContent()
+                                    .equals("rpm-builder-maven-plugin"))
+                    .findFirst();
+            // We know the template is a specific format so don't need to use isPresent.
+            @SuppressWarnings("OptionalGetWithoutIsPresent")
+            Element macros = plugin.get().child("configuration").get().child("macros").get();
+            if (isNotEmpty(tagInfo.getExtra().getRhpkgSclPrefix())) {
+                pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRhpkgSclPrefix());
+            }
+            if (isNotEmpty(tagInfo.getExtra().getRpmMacroScl())) {
+                pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRpmMacroScl());
+            }
+            if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
+                pomEditor.insertMavenElement(macros, "dist", tagInfo.getExtra().getRpmMacroDist());
+            }
 
             Files.writeString(target.toPath(), pomEditor.toXml());
 

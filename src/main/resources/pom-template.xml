@@ -58,8 +58,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <macros>
-                        <!-- Insert macros to be used at RPM build time e.g. -->
-                        <!-- <dist>.el7eap</dist> -->
+                        <!-- Insert macros to be used at RPM build time -->
                     </macros>
                     <changeLog>
                         <generate>true</generate>
