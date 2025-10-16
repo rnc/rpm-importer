@@ -15,8 +15,6 @@ import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.VERSION;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -102,7 +100,7 @@ public class App implements Runnable {
     @Option(
             names = "--repository",
             description = "Skips cloning and uses existing repository")
-    private Path repository;
+    Path repository;
 
     @Option(
             names = "--skip-sync",
@@ -237,23 +235,9 @@ public class App implements Runnable {
                     Brew.getTagInfo(branch + "-build"),
                     TagInfo.class);
 
-            String source;
-            try (InputStream x = App.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
-                assert x != null;
-                source = new String(x.readAllBytes(), StandardCharsets.UTF_8);
-            }
+            String source = Utils.readTemplate();
 
-            // Replace the "template.spec" marker in the template. Easier to do via
-            // string replace.
-            try (Stream<Path> stream = Files.walk(repository, 1)) {
-                var r = stream.filter(m -> m.toFile().getName().endsWith(".spec")).toList();
-                if (r.size() > 1) {
-                    log.error("Multiple spec files found: {}", r);
-                } else {
-                    log.info("Replacing template.spec marker with: {}", r.getFirst().toFile().getName());
-                    source = source.replaceAll("template.spec", r.getFirst().toFile().getName());
-                }
-            }
+            source = updateSpecName(source);
 
             // Replace the Source100 marker in the template. Easier to do via string
             // replace rather than searching for the element.
@@ -334,25 +318,7 @@ public class App implements Runnable {
                 }
             });
 
-            // findFirst as the template only has one plugin with this artifactId
-            plugin = plugins.children()
-                    .filter(
-                            element -> pomEditor.findChildElement(element, "artifactId")
-                                    .textContent()
-                                    .equals("rpm-builder-maven-plugin"))
-                    .findFirst();
-            // We know the template is a specific format so don't need to use isPresent.
-            @SuppressWarnings("OptionalGetWithoutIsPresent")
-            Element macros = plugin.get().child("configuration").get().child("macros").get();
-            if (isNotEmpty(tagInfo.getExtra().getRhpkgSclPrefix())) {
-                pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRhpkgSclPrefix());
-            }
-            if (isNotEmpty(tagInfo.getExtra().getRpmMacroScl())) {
-                pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRpmMacroScl());
-            }
-            if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
-                pomEditor.insertMavenElement(macros, "dist", tagInfo.getExtra().getRpmMacroDist());
-            }
+            updateMacros(pomEditor, plugins, tagInfo);
 
             Files.writeString(target.toPath(), pomEditor.toXml());
 
@@ -361,6 +327,43 @@ public class App implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    void updateMacros(PomEditor pomEditor, Element plugins, TagInfo tagInfo) {
+        // findFirst as the template only has one plugin with this artifactId
+        var plugin = plugins.children()
+                .filter(
+                        element -> pomEditor.findChildElement(element, "artifactId")
+                                .textContent()
+                                .equals("rpm-builder-maven-plugin"))
+                .findFirst();
+        // We know the template is a specific format so don't need to use isPresent.
+        @SuppressWarnings("OptionalGetWithoutIsPresent")
+        Element macros = plugin.get().child("configuration").get().child("macros").get();
+        if (isNotEmpty(tagInfo.getExtra().getRhpkgSclPrefix())) {
+            pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRhpkgSclPrefix());
+        }
+        if (isNotEmpty(tagInfo.getExtra().getRpmMacroScl())) {
+            pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRpmMacroScl());
+        }
+        if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
+            pomEditor.insertMavenElement(macros, "dist", tagInfo.getExtra().getRpmMacroDist());
+        }
+    }
+
+    String updateSpecName(String source) throws IOException {
+        // Replace the "template.spec" marker in the template. Easier to do via
+        // string replace.
+        try (Stream<Path> stream = Files.walk(repository, 1)) {
+            var r = stream.filter(m -> m.toFile().getName().endsWith(".spec")).toList();
+            if (r.size() > 1) {
+                log.error("Multiple spec files found: {}", r);
+            } else {
+                log.info("Replacing template.spec marker with: {}", r.getFirst().toFile().getName());
+                return source.replaceAll("template.spec", r.getFirst().toFile().getName());
+            }
+        }
+        return source;
     }
 
     List<SimpleArtifactRef> getDependencies(

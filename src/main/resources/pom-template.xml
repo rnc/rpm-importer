@@ -57,8 +57,8 @@
                 <version>1.2</version>
                 <extensions>true</extensions>
                 <configuration>
+                    <!-- Insert macros to be used at RPM build time -->
                     <macros>
-                        <!-- Insert macros to be used at RPM build time -->
                     </macros>
                     <changeLog>
                         <generate>true</generate>

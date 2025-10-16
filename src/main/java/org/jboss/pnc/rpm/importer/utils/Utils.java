@@ -1,7 +1,9 @@
 package org.jboss.pnc.rpm.importer.utils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,6 +29,14 @@ public class Utils {
             return Files.createTempDirectory(prefix);
         } catch (IOException e) {
             throw new RuntimeException("Cannot create temporary directory for " + activity, e);
+        }
+    }
+
+
+    public static String readTemplate() throws IOException {
+        try (InputStream x = Utils.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
+            assert x != null;
+            return new String(x.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
