@@ -32,7 +32,6 @@ public class Utils {
         }
     }
 
-
     public static String readTemplate() throws IOException {
         try (InputStream x = Utils.class.getClassLoader().getResourceAsStream("pom-template.xml")) {
             assert x != null;
