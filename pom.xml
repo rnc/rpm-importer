@@ -12,15 +12,15 @@
     <artifactId>rpm-importer-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 
-    <organization>
-        <name>Red Hat, Inc.</name>
-        <url>https://www.redhat.com/</url>
-    </organization>
-
     <name>RPM Importer Tool</name>
     <description>CLI Tool to import distgit repositories to gitlab</description>
     <url>https://github.com/project-ncl/rpm-importer</url>
     <inceptionYear>2025</inceptionYear>
+
+    <organization>
+        <name>Red Hat, Inc.</name>
+        <url>https://www.redhat.com/</url>
+    </organization>
 
     <licenses>
         <license>
@@ -37,6 +37,12 @@
             <email>ncross@redhat.com</email>
         </developer>
     </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/project-ncl/rpm-importer.git</connection>
+        <developerConnection>scm:git:git@github.com:project-ncl/rpm-importer.git</developerConnection>
+        <url>https://github.com/project-ncl/rpm-importer</url>
+    </scm>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
