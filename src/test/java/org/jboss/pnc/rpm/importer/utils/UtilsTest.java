@@ -58,11 +58,12 @@ class UtilsTest {
 
     @Test
     void testRemoteCheck() {
-        String url = "https://github.com/project-ncl/rpm-importer.git";
+        String httpUrl = "https://github.com/project-ncl/rpm-importer.git";
+        String sshUrl = "ssh://git@github.com/project-ncl/rpm-importer.git";
 
-        assertTrue(Utils.checkForRemoteRepositoryAndBranch(url, "main"));
-        assertFalse(Utils.checkForRemoteRepositoryAndBranch(url, "main-INVALID"));
-        assertFalse(Utils.checkForRemoteRepositoryAndBranch(url + "-INVALID", "main"));
+        assertTrue(Utils.checkForRemoteRepositoryAndBranch(httpUrl, "main"));
+        assertFalse(Utils.checkForRemoteRepositoryAndBranch(httpUrl, "main-INVALID"));
+        assertFalse(Utils.checkForRemoteRepositoryAndBranch(sshUrl + "-INVALID", "main"));
     }
 
     @Test
