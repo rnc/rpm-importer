@@ -15,7 +15,7 @@ Note this assumes suitable gpg settings exist within `$HOME/.m2/settings.xml`.
 
 ### Downloading a snapshot
 
-To download a snapshot version run `mvn dependency:copy -Dartifact='org.jboss.pnc:rpm-importer:1.0.0-SNAPSHOT' -DoutputDirectory="$PWD"` -DcentralSnapshots
+To download a snapshot version run `mvn dependency:copy -Dartifact='org.jboss.pnc:rpm-importer:1.0.0-SNAPSHOT' -DoutputDirectory="$PWD" -DcentralSnapshots`
 
 This assumes you have a `$HOME/.m2/settings.xml` with a section like
 
