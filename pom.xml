@@ -10,7 +10,7 @@
 
   <groupId>org.jboss.pnc</groupId>
   <artifactId>rpm-importer</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>0.1</version>
 
   <name>RPM Importer Tool</name>
   <description>CLI Tool to import distgit repositories to gitlab</description>
@@ -41,6 +41,7 @@
   <scm>
     <connection>scm:git:https://github.com/project-ncl/rpm-importer.git</connection>
     <developerConnection>scm:git:git@github.com:project-ncl/rpm-importer.git</developerConnection>
+    <tag>rpm-importer-0.1</tag>
     <url>https://github.com/project-ncl/rpm-importer</url>
   </scm>
 
