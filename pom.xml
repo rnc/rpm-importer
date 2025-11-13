@@ -118,6 +118,13 @@
       <groupId>org.commonjava.atlas</groupId>
       <artifactId>atlas-identities</artifactId>
       <version>1.1.8</version>
+      <exclusions>
+        <!-- Avoid conflict with multiple SLF4J providers -->
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>logback-classic</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.jboss.pnc.bacon</groupId>
