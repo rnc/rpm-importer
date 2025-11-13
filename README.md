@@ -13,6 +13,10 @@ To release run `mvn release:prepare release:perform -Prelease -Pjboss-release -P
 
 Note this assumes suitable gpg settings exist within `$HOME/.m2/settings.xml`.
 
+### Downloading a release
+
+Releases may be found in https://repo1.maven.org/maven2/org/jboss/pnc/rpm-importer/
+
 ### Downloading a snapshot
 
 To download a snapshot version run `mvn dependency:copy -Dartifact='org.jboss.pnc:rpm-importer:1.0.0-SNAPSHOT' -DoutputDirectory="$PWD" -DcentralSnapshots`
