@@ -42,6 +42,8 @@ Usage: rpm-importer [-hvV] [--overwrite] [--push] [--skip-sync] [--branch=<branc
 
       --branch=<branch>     Branch in distgit repository
   -h, --help                Show this help message and exit.
+      --lastMeadBuild=<lastMeadBuildOverride>
+                            Override the value found from last-mead-build. Accepts a Maven GAV.
       --overwrite           Overwrites existing pom. Dangerous!
   -p, --configPath=<configPath>
                             Path to PNC configuration folder
@@ -68,3 +70,4 @@ Notes:
 * Unless `--push` is suppled the tool will only commit changes locally and **not** push to the remote. It is highly recommended that the user checks the resulting `pom.xml` before _manually_ running any git push.
 * Skipping repository syncing only makes sense if the repository has already been mirrored to GitLab. This might be the case if the user is switching between multiple branches.
 * Using an existing locally cloned repository is primarily useful for local debugging.
+* It uses last-mead-build to retrieve the NVR and examine the Brew extra information and the typeinfo. If this typeinfo that contains a Maven GAV does not correspond to a valid type (which we have seen happen with Hibernate) then use lastMeadBuild to pass in a valid GAV from the build within PNC. It must be a GAV from a Red Hat build from PNC.

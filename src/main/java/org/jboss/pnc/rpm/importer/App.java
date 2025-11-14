@@ -18,12 +18,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang.StringUtils;
+import org.commonjava.atlas.maven.ident.ref.ArtifactRef;
 import org.commonjava.atlas.maven.ident.ref.SimpleArtifactRef;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -45,7 +47,10 @@ import org.jboss.pnc.dto.response.RepositoryCreationResponse;
 import org.jboss.pnc.rpm.importer.clients.OrchService;
 import org.jboss.pnc.rpm.importer.clients.ReqourService;
 import org.jboss.pnc.rpm.importer.model.brew.BuildInfo;
+import org.jboss.pnc.rpm.importer.model.brew.Extra;
+import org.jboss.pnc.rpm.importer.model.brew.Maven;
 import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
+import org.jboss.pnc.rpm.importer.model.brew.Typeinfo;
 import org.jboss.pnc.rpm.importer.utils.Brew;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.maveniverse.domtrip.maven.PomEditor;
@@ -116,6 +121,11 @@ public class App implements Runnable {
             names = "--push",
             description = "Pushes changes to the remote repository. Will still commit")
     private boolean push;
+
+    @Option(
+            names = "--lastMeadBuild",
+            description = "Override the value found from last-mead-build. Accepts a Maven GAV.")
+    private String lastMeadBuildOverride;
 
     // TODO: Should we create an option to pass in a set of macros.
 
@@ -229,7 +239,22 @@ public class App implements Runnable {
                     "Setting groupId : artifactId to comprise of scoped groupId and branch name: {}:{}",
                     groupId,
                     artifactId);
-            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
+
+            BuildInfo lastMeadBuildForDeps = lastMeadBuild;
+            if (lastMeadBuildOverride != null) {
+                ArtifactRef artifactRef = SimpleArtifactRef.parse(lastMeadBuildOverride);
+                lastMeadBuildForDeps = new BuildInfo();
+                lastMeadBuildForDeps.setExtra(new Extra());
+                lastMeadBuildForDeps.getExtra().setTypeinfo(new Typeinfo());
+                lastMeadBuildForDeps.getExtra().getTypeinfo().setMaven(new Maven());
+                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setGroupId(artifactRef.getGroupId());
+                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setArtifactId(artifactRef.getArtifactId());
+                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setVersion(artifactRef.getVersionString());
+                log.info(
+                        "Overriding lastMeadBuild with {}",
+                        artifactRef);
+            }
+            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuildForDeps);
 
             TagInfo tagInfo = MAPPER.readValue(
                     Brew.getTagInfo(branch + "-build"),
@@ -405,17 +430,27 @@ public class App implements Runnable {
                     artifactId,
                     buildId);
 
-            Page<Artifact> artifacts = orchService.getBuiltArtifacts(
-                    pncConfig.getUrl(),
-                    pncConfiguration.getBearerTokenSupplier().get(),
-                    buildId);
-            var deps = artifacts.getContent()
-                    .stream()
-                    .map(c -> SimpleArtifactRef.parse(c.getIdentifier()))
-                    .sorted()
-                    .toList();
-            log.info("Found dependencies {}", deps);
-            return deps;
+            List<SimpleArtifactRef> result = new ArrayList<>();
+            int pageIndex = 0;
+            int pageTotal;
+            do {
+                Page<Artifact> artifacts = orchService.getBuiltArtifacts(
+                        pncConfig.getUrl(),
+                        pncConfiguration.getBearerTokenSupplier().get(),
+                        buildId,
+                        50,
+                        pageIndex);
+                pageTotal = artifacts.getTotalPages();
+                var deps = artifacts.getContent()
+                        .stream()
+                        .map(c -> SimpleArtifactRef.parse(c.getIdentifier()))
+                        .sorted()
+                        .toList();
+                log.info("Found dependencies ({}) (page {} out of {}) {}", deps.size(), pageIndex, pageTotal, deps);
+                pageIndex++;
+                result.addAll(deps);
+            } while (pageIndex < pageTotal);
+            return result;
         } else {
             // TODO: Should this be an error? This would imply there is no existing build in PNC to be wrapped.
             log.error("Unable to find an artifact from GAV {}", lastMeadBuild.getExtra().getTypeinfo().getMaven());

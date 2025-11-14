@@ -74,5 +74,7 @@ public interface OrchService {
     Page<Artifact> getBuiltArtifacts(
             @Url String url,
             @HeaderParam("Authorization") String accessToken,
-            @PathParam("id") String id);
+            @PathParam("id") String id,
+            @QueryParam("pageSize") int pageSize,
+            @QueryParam("pageIndex") int pageIndex);
 }
