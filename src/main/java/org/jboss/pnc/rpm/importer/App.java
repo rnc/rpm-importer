@@ -139,7 +139,6 @@ public class App implements Runnable {
             log.warn("No branch specified; unable to proceed");
             return;
         }
-
         if (configPath != null) {
             setConfigLocation(configPath, "flag");
         } else if (System.getenv(Constant.CONFIG_ENV) != null) {
@@ -150,6 +149,7 @@ public class App implements Runnable {
         PncConfig pncConfig = Config.instance().getActiveProfile().getPnc();
         Configuration pncConfiguration = PncClientHelper.getPncConfiguration();
         ReqourConfig reqourConfig = Config.instance().getActiveProfile().getReqour();
+        TranslateResponse translateResponse;
         if (reqourConfig == null) {
             log.error("""
                     Configure reqour within the Bacon config file i.e.:
@@ -158,9 +158,14 @@ public class App implements Runnable {
                     """);
             throw new RuntimeException("No reqour configuration found.");
         }
-        TranslateResponse translateResponse = reqourService.external_to_internal(
-                reqourConfig.getUrl(),
-                TranslateRequest.builder().externalUrl(url).build());
+        try {
+            translateResponse = reqourService.external_to_internal(
+                    reqourConfig.getUrl(),
+                    TranslateRequest.builder().externalUrl(url).build());
+        } catch (RuntimeException e) {
+            log.error("Unable to connect to reqour. Have you configured requor in the Bacon configuration file correctly?");
+            throw e;
+        }
 
         RepositoryCreationResponse repositoryCreationResponse;
         String internalUrl = translateResponse.getInternalUrl();
