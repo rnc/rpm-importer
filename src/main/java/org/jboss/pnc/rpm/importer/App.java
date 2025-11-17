@@ -163,7 +163,8 @@ public class App implements Runnable {
                     reqourConfig.getUrl(),
                     TranslateRequest.builder().externalUrl(url).build());
         } catch (RuntimeException e) {
-            log.error("Unable to connect to reqour. Have you configured requor in the Bacon configuration file correctly?");
+            log.error(
+                    "Unable to connect to reqour. Have you configured requor in the Bacon configuration file correctly?");
             throw e;
         }
 
