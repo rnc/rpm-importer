@@ -1,17 +1,17 @@
 package org.jboss.pnc.rpm.importer;
 
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.ARTIFACT_ID;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.CLASSIFIER;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCIES;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCY_MANAGEMENT;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.GROUP_ID;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.NAME;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.PROPERTIES;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.TYPE;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.VERSION;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.ARTIFACT_ID;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.CLASSIFIER;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCIES;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.DEPENDENCY_MANAGEMENT;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.GROUP_ID;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.NAME;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.PROPERTIES;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.TYPE;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.VERSION;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,7 +53,6 @@ import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
 import org.jboss.pnc.rpm.importer.model.brew.Typeinfo;
 import org.jboss.pnc.rpm.importer.utils.Brew;
 import org.jboss.pnc.rpm.importer.utils.Utils;
-import org.maveniverse.domtrip.maven.PomEditor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +60,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import eu.maveniverse.domtrip.Document;
 import eu.maveniverse.domtrip.Element;
+import eu.maveniverse.domtrip.maven.PomEditor;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -310,11 +310,12 @@ public class App implements Runnable {
                     .textContent(version);
             Element depMgmt = pomEditor.findChildElement(pomEditor.root(), DEPENDENCY_MANAGEMENT);
             Element deps = pomEditor.findChildElement(depMgmt, DEPENDENCIES);
-            pomEditor.addDependency(
-                    deps,
-                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
-                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
-                    "${wrappedBuild}");
+            pomEditor.dependencies()
+                    .addDependency(
+                            deps,
+                            lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                            lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                            "${wrappedBuild}");
 
             Element plugins = pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), BUILD), PLUGINS);
             // findFirst as the template only has one plugin with this artifactId

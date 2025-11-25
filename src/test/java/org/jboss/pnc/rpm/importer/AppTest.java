@@ -1,8 +1,8 @@
 package org.jboss.pnc.rpm.importer;
 
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
+import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
-import static org.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,10 +13,10 @@ import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.maveniverse.domtrip.maven.PomEditor;
 
 import eu.maveniverse.domtrip.Document;
 import eu.maveniverse.domtrip.Element;
+import eu.maveniverse.domtrip.maven.PomEditor;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 class AppTest {
