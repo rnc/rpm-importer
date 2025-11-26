@@ -245,6 +245,10 @@
         <version>3.1.0</version>
         <configuration>
           <pom>
+            <includes>
+              <include>pom.xml</include>
+              <include>src/main/resources/pom-template.xml</include>
+            </includes>
             <sortPom>
               <expandEmptyElements>false</expandEmptyElements>
             </sortPom>
