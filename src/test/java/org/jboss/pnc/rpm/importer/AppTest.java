@@ -50,9 +50,9 @@ class AppTest {
 
         String result = pomEditor.toXml();
         assertTrue(result.contains("""
-                                    <macros>
-                                        <dist>MY-CUSTOM-MACRO</dist>
-                                    </macros>
+                          <macros>
+                            <dist>MY-CUSTOM-MACRO</dist>
+                          </macros>
                 """));
     }
 }

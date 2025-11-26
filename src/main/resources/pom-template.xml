@@ -1,71 +1,72 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+  <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.jboss.pnc.rpm</groupId>
-    <artifactId>x</artifactId>
-    <version>0</version>
-    <packaging>spec</packaging>
+  <parent>
+    <groupId>org.jboss</groupId>
+    <artifactId>jboss-parent</artifactId>
+    <version>49</version>
+  </parent>
 
-    <name></name>
+  <groupId>org.jboss.pnc.rpm</groupId>
+  <artifactId>x</artifactId>
+  <version>0</version>
+  <packaging>spec</packaging>
 
-    <organization>
-        <name>Red Hat, Inc.</name>
-        <url>https://www.redhat.com/</url>
-    </organization>
+  <name/>
 
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+  <organization>
+    <name>Red Hat, Inc.</name>
+    <url>https://www.redhat.com/</url>
+  </organization>
 
-        <!-- Can't use project.version as this project may be built differently to dependent build -->
-        <wrappedBuild></wrappedBuild>
-    </properties>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <dependencyManagement>
-        <dependencies>
-        </dependencies>
-    </dependencyManagement>
+    <!-- Can't use project.version as this project may be built differently to dependent build -->
+    <wrappedBuild/>
+  </properties>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.8.1</version>
-                <executions>
-                    <!-- This execution handles the built dependent jars -->
-                    <execution>
-                        <id>copy</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>copy</goal>
-                        </goals>
-                        <configuration>
-                            <artifactItems>
-                            </artifactItems>
-                            <outputDirectory>${basedir}</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+  <dependencyManagement>
+    <dependencies/>
+  </dependencyManagement>
 
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <!-- This execution handles the built dependent jars -->
+          <execution>
+            <id>copy</id>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <phase>prepare-package</phase>
+            <configuration>
+              <artifactItems/>
+              <outputDirectory>${basedir}</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
 
-            <plugin>
-                <groupId>org.jboss.pnc</groupId>
-                <artifactId>rpm-builder-maven-plugin</artifactId>
-                <version>1.2</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <!-- Insert macros to be used at RPM build time -->
-                    <macros>
-                    </macros>
-                    <changeLog>
-                        <generate>true</generate>
-                        <email>project-ncl@redhat.com</email>
-                    </changeLog>
-                    <groovyPatch>
-                        // Note the spec file is always copied to target/spec first so modify it there.
+      <plugin>
+        <groupId>org.jboss.pnc</groupId>
+        <artifactId>rpm-builder-maven-plugin</artifactId>
+        <version>1.3</version>
+        <extensions>true</extensions>
+        <configuration>
+          <!-- Insert macros to be used at RPM build time -->
+          <macros/>
+          <changeLog>
+            <generate>true</generate>
+            <email>project-ncl@redhat.com</email>
+          </changeLog>
+          <groovyPatch>// Note the spec file is always copied to target/spec first so modify it there.
                         def spec = new File("${project.build.directory}/spec/template.spec")
                         def contents = spec.getText('UTF-8')
 
@@ -86,11 +87,10 @@
                         %endif
 
                         """ + contents
-                        spec.write(contents)
-                    </groovyPatch>
-                </configuration>
-            </plugin>
+                        spec.write(contents)</groovyPatch>
+        </configuration>
+      </plugin>
 
-        </plugins>
-    </build>
+    </plugins>
+  </build>
 </project>

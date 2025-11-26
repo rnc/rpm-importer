@@ -70,8 +70,8 @@ class UtilsTest {
     void testReadTemplate() throws IOException {
         String template = Utils.readTemplate();
         assertTrue(template.contains("""
-                                <groupId>org.jboss.pnc</groupId>
-                                <artifactId>rpm-builder-maven-plugin</artifactId>
+                        <groupId>org.jboss.pnc</groupId>
+                        <artifactId>rpm-builder-maven-plugin</artifactId>
                 """));
     }
 }
