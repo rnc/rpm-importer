@@ -82,10 +82,10 @@ public class App implements Runnable {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @RestClient
-    ReqourService reqourService;
+    private ReqourService reqourService;
 
     @RestClient
-    OrchService orchService;
+    private OrchService orchService;
 
     @Option(names = { "-v", "--verbose" }, description = "Verbose output")
     boolean verbose;
@@ -158,22 +158,23 @@ public class App implements Runnable {
                     """);
             throw new RuntimeException("No reqour configuration found.");
         }
-        try {
-            translateResponse = reqourService.external_to_internal(
-                    reqourConfig.getUrl(),
-                    TranslateRequest.builder().externalUrl(url).build());
-        } catch (RuntimeException e) {
-            log.error(
-                    "Unable to connect to reqour. Have you configured requor in the Bacon configuration file correctly?");
-            throw e;
-        }
-
-        RepositoryCreationResponse repositoryCreationResponse;
-        String internalUrl = translateResponse.getInternalUrl();
-
-        log.info("For external URL {} retrieved internal {}", url, internalUrl);
 
         if (repository == null) {
+            try {
+                translateResponse = reqourService.external_to_internal(
+                        reqourConfig.getUrl(),
+                        TranslateRequest.builder().externalUrl(url).build());
+            } catch (RuntimeException e) {
+                log.error(
+                        "Unable to connect to reqour. Have you configured requor in the Bacon configuration file correctly?");
+                throw e;
+            }
+
+            RepositoryCreationResponse repositoryCreationResponse;
+            String internalUrl = translateResponse.getInternalUrl();
+
+            log.info("For external URL {} retrieved internal {}", url, internalUrl);
+
             // We search using the internal URL in case the scm repository hasn't been setup to
             // sync and doesn't have the external URL listed.
             Optional<SCMRepository> internalUrlOpt = (orchService.getAll(
@@ -221,9 +222,18 @@ public class App implements Runnable {
             // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
             // brew we can obtain the GAV from the NVR.
             String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
+            String buildInfo = Brew.getBuildInfo(lastMeadBuildFile);
             BuildInfo lastMeadBuild = MAPPER.readValue(
-                    Brew.getBuildInfo(lastMeadBuildFile),
+                    buildInfo,
                     BuildInfo.class);
+
+            log.debug("Retrieved BuildInfo\n{}", buildInfo);
+            if (!Utils.validateBuildInfo(lastMeadBuild)) {
+                log.error("This build was not built in PNC: {}", buildInfo);
+                throw new RuntimeException(
+                        "The build " + lastMeadBuildFile
+                                + " must be ported to PNC before attempting to wrap it in a RPM");
+            }
             log.info(
                     "Found last-mead-build {} with GAV {}:{}:{}",
                     lastMeadBuildFile,
@@ -419,7 +429,7 @@ public class App implements Runnable {
         var found = allArtifacts.getContent().stream().findFirst();
         if (found.isPresent()) {
             String artifactId = found.get().getId();
-            log.info("Retrieved artifact {}", artifactId);
+            log.debug("Retrieved artifact {}", artifactId);
             Artifact artifact = orchService.getSpecific(
                     pncConfig.getUrl(),
                     pncConfiguration.getBearerTokenSupplier().get(),
@@ -431,7 +441,7 @@ public class App implements Runnable {
                 return Collections.emptyList();
             }
             String buildId = artifact.getBuild().getId();
-            log.info(
+            log.debug(
                     "For artifact {} found artifactId {} with buildId {}",
                     lastMeadBuild.getExtra().getTypeinfo().getMaven(),
                     artifactId,
