@@ -2,12 +2,15 @@ package org.jboss.pnc.rpm.importer;
 
 import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.BUILD;
 import static eu.maveniverse.domtrip.maven.MavenPomElements.Elements.PLUGINS;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Optional;
 
+import org.commonjava.atlas.maven.ident.ref.SimpleArtifactRef;
 import org.jboss.pnc.rpm.importer.model.brew.Extra;
 import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
 import org.jboss.pnc.rpm.importer.utils.Utils;
@@ -54,5 +57,19 @@ class AppTest {
                             <dist>MY-CUSTOM-MACRO</dist>
                           </macros>
                 """));
+    }
+
+    @Test
+    void testHandleInjectSources(@TempDir Path tempDir) throws IOException {
+        File spec = new File(tempDir.toString(), "example.spec");
+        spec.createNewFile();
+        String source = Utils.readTemplate();
+
+        App app = new App();
+        String result = app.injectSourcesMacro(Optional.of(SimpleArtifactRef.parse("org.foo:bar:1.2")), source);
+        assertTrue(result.contains("Source100: bar-1.2-null.pom"));
+
+        result = app.injectSourcesMacro(Optional.empty(), source);
+        assertFalse(result.contains("Source100:"));
     }
 }
