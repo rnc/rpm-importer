@@ -67,7 +67,10 @@ class AppTest {
 
         App app = new App();
         String result = app.injectSourcesMacro(Optional.of(SimpleArtifactRef.parse("org.foo:bar:1.2")), source);
-        assertTrue(result.contains("Source100: bar-1.2-null.pom"));
+        assertTrue(result.contains("Source100: bar-${wrappedBuild}.pom"));
+
+        result = app.injectSourcesMacro(Optional.of(SimpleArtifactRef.parse("org.foo:bar:tar.gz:1.2:sources")), source);
+        assertTrue(result.contains("Source100: bar-${wrappedBuild}-sources.tar.gz"));
 
         result = app.injectSourcesMacro(Optional.empty(), source);
         assertFalse(result.contains("Source100:"));
