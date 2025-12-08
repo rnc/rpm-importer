@@ -266,9 +266,11 @@ public class App implements Runnable {
                 lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setGroupId(artifactRef.getGroupId());
                 lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setArtifactId(artifactRef.getArtifactId());
                 lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setVersion(artifactRef.getVersionString());
+                version = artifactRef.getVersionString();
                 log.info(
-                        "Overriding lastMeadBuild with {}",
-                        artifactRef);
+                        "Overriding lastMeadBuild with {} and version to {}",
+                        artifactRef,
+                        version);
             }
             List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuildForDeps);
 
@@ -285,19 +287,7 @@ public class App implements Runnable {
             Optional<SimpleArtifactRef> projectSources = dependencies.stream()
                     .filter(a -> "project-sources".equals(a.getClassifier()))
                     .findFirst();
-            if (projectSources.isPresent()) {
-                String projectSourcesInjection = projectSources.get().getArtifactId() + "-" +
-                        projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
-                        + "." + projectSources.get().getType();
-                log.info("Injecting under Source100 marker project sources: {}", projectSourcesInjection);
-                // e.g. Source100: sshd-2.14.0.redhat-00002-project-sources.tar.gz
-                source = source.replaceAll(
-                        "Source100:",
-                        "Source100: " + projectSourcesInjection);
-            } else {
-                log.warn(
-                        "Unable to find artifact with project-sources classifier to substitute Source100 marker in spec file.");
-            }
+            source = injectSourcesMacro(projectSources, source);
 
             File target = new File(repository.toFile(), "pom.xml");
             if (target.exists() && !overwrite) {
@@ -391,6 +381,24 @@ public class App implements Runnable {
         if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
             pomEditor.insertMavenElement(macros, "dist", tagInfo.getExtra().getRpmMacroDist());
         }
+    }
+
+    String injectSourcesMacro(Optional<SimpleArtifactRef> projectSources, String source) {
+        if (projectSources.isPresent()) {
+            String projectSourcesInjection = projectSources.get().getArtifactId() + "-" +
+                    projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
+                    + "." + projectSources.get().getType();
+            log.info("Injecting under Source100 marker project sources: {}", projectSourcesInjection);
+            // e.g. Source100: sshd-2.14.0.redhat-00002-project-sources.tar.gz
+            source = source.replaceAll(
+                    "Source100:",
+                    "Source100: " + projectSourcesInjection);
+        } else {
+            log.warn(
+                    "Unable to find artifact with project-sources classifier to substitute Source100 marker in spec file.");
+            source = source.replaceAll("Source100:", "");
+        }
+        return source;
     }
 
     String updateSpecName(String source) throws IOException {
