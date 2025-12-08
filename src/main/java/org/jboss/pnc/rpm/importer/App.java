@@ -385,8 +385,8 @@ public class App implements Runnable {
 
     String injectSourcesMacro(Optional<SimpleArtifactRef> projectSources, String source) {
         if (projectSources.isPresent()) {
-            String projectSourcesInjection = projectSources.get().getArtifactId() + "-" +
-                    projectSources.get().getVersionString() + "-" + projectSources.get().getClassifier()
+            String projectSourcesInjection = projectSources.get().getArtifactId() + "-\\${wrappedBuild}" +
+                    (projectSources.get().getClassifier() == null ? "" : "-" + projectSources.get().getClassifier())
                     + "." + projectSources.get().getType();
             log.info("Injecting under Source100 marker project sources: {}", projectSourcesInjection);
             // e.g. Source100: sshd-2.14.0.redhat-00002-project-sources.tar.gz
