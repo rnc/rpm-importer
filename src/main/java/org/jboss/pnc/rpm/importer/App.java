@@ -20,7 +20,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -46,6 +48,7 @@ import org.jboss.pnc.dto.response.Page;
 import org.jboss.pnc.dto.response.RepositoryCreationResponse;
 import org.jboss.pnc.rpm.importer.clients.OrchService;
 import org.jboss.pnc.rpm.importer.clients.ReqourService;
+import org.jboss.pnc.rpm.importer.model.Macros;
 import org.jboss.pnc.rpm.importer.model.brew.BuildInfo;
 import org.jboss.pnc.rpm.importer.model.brew.Extra;
 import org.jboss.pnc.rpm.importer.model.brew.Maven;
@@ -96,11 +99,11 @@ public class App implements Runnable {
     @Option(names = { "-p", "--configPath" }, description = "Path to PNC configuration folder")
     private String configPath = null;
 
-    @Option(names = "--url", description = "External URL to distgit repository", required = true)
+    @Option(names = "--url", description = "External URL to git repository", required = true)
     private String url;
 
-    @Option(names = "--branch", description = "Branch in distgit repository")
-    private String branch;
+    @Option(names = "--branch", description = "Branch in git repository", required = true)
+    String branch;
 
     @Option(
             names = "--repository",
@@ -123,11 +126,15 @@ public class App implements Runnable {
     private boolean push;
 
     @Option(
-            names = "--lastMeadBuild",
+            names = { "--lastMeadBuild", "--gav" },
             description = "Override the value found from last-mead-build. Accepts a Maven GAV.")
-    private String lastMeadBuildOverride;
+    String gavOverride;
 
-    // TODO: Should we create an option to pass in a set of macros.
+    @Option(
+            names = "--macros",
+            description = "Pass in a (comma separated) set of macros to use",
+            splitSynopsisLabel = ",")
+    Map<String, String> customMacros;
 
     @Override
     public void run() {
@@ -148,18 +155,18 @@ public class App implements Runnable {
         }
         PncConfig pncConfig = Config.instance().getActiveProfile().getPnc();
         Configuration pncConfiguration = PncClientHelper.getPncConfiguration();
-        ReqourConfig reqourConfig = Config.instance().getActiveProfile().getReqour();
-        TranslateResponse translateResponse;
-        if (reqourConfig == null) {
-            log.error("""
-                    Configure reqour within the Bacon config file i.e.:
-                      reqour:
-                         url: "https://reqour.pnc.<as other URLS...>"
-                    """);
-            throw new RuntimeException("No reqour configuration found.");
-        }
 
         if (repository == null) {
+            ReqourConfig reqourConfig = Config.instance().getActiveProfile().getReqour();
+            TranslateResponse translateResponse;
+            if (reqourConfig == null) {
+                log.error("""
+                        Configure reqour within the Bacon config file i.e.:
+                          reqour:
+                             url: "https://reqour.pnc.<as other URLS...>"
+                        """);
+                throw new RuntimeException("No reqour configuration found.");
+            }
             try {
                 translateResponse = reqourService.external_to_internal(
                         reqourConfig.getUrl(),
@@ -211,6 +218,9 @@ public class App implements Runnable {
             repository = Utils.cloneRepository(internalUrl, branch);
         } else {
             log.info("Using existing repository {}", repository);
+            if (!repository.toFile().exists()) {
+                throw new RuntimeException("Repository " + repository + " does not exist");
+            }
             try (var jGit = Git.init().setDirectory(repository.toFile()).call()) {
                 jGit.checkout().setName(branch).call();
             } catch (GitAPIException e) {
@@ -219,64 +229,86 @@ public class App implements Runnable {
         }
 
         try {
-            // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
-            // brew we can obtain the GAV from the NVR.
-            String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
-            String buildInfo = Brew.getBuildInfo(lastMeadBuildFile);
-            BuildInfo lastMeadBuild = MAPPER.readValue(
-                    buildInfo,
-                    BuildInfo.class);
+            BuildInfo lastMeadBuild;
+            String version;
+            String name;
 
-            log.debug("Retrieved BuildInfo\n{}", buildInfo);
-            if (!Utils.validateBuildInfo(lastMeadBuild)) {
-                log.error("This build was not built in PNC: {}", buildInfo);
-                throw new RuntimeException(
-                        "The build " + lastMeadBuildFile
-                                + " must be ported to PNC before attempting to wrap it in a RPM");
+            if (customMacros == null) {
+                customMacros = new HashMap<>();
+                TagInfo tagInfo = MAPPER.readValue(
+                        Brew.getTagInfo(branch + "-build"),
+                        TagInfo.class);
+                if (isNotEmpty(tagInfo.getExtra().getRhpkgSclPrefix())) {
+                    customMacros.put("scl", tagInfo.getExtra().getRhpkgSclPrefix());
+                }
+                if (isNotEmpty(tagInfo.getExtra().getRpmMacroScl())) {
+                    customMacros.put("scl", tagInfo.getExtra().getRpmMacroScl());
+                }
+                if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
+                    customMacros.put("dist", tagInfo.getExtra().getRpmMacroDist());
+                }
+                log.info("Extracted macros from Brew tag {}", customMacros);
+            } else {
+                log.info("Using custom macros {}", customMacros);
             }
-            log.info(
-                    "Found last-mead-build {} with GAV {}:{}:{}",
-                    lastMeadBuildFile,
-                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
-                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
-                    lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion());
-            String version = Utils.parseVersionReleaseSerial(repository);
-            log.info("Found version: {}", version);
+            Macros macros = new Macros(customMacros);
+
+            if (gavOverride == null) {
+                // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
+                // brew we can obtain the GAV from the NVR.
+                String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
+                String buildInfo = Brew.getBuildInfo(lastMeadBuildFile);
+                lastMeadBuild = MAPPER.readValue(
+                        buildInfo,
+                        BuildInfo.class);
+
+                log.debug("Retrieved BuildInfo\n{}", buildInfo);
+                if (!Utils.validateBuildInfo(lastMeadBuild)) {
+                    log.error("This build was not built in PNC: {}", buildInfo);
+                    throw new RuntimeException(
+                            "The build " + lastMeadBuildFile
+                                    + " must be ported to PNC before attempting to wrap it in a RPM");
+                }
+                log.info(
+                        "Found last-mead-build {} with GAV {}:{}:{}",
+                        lastMeadBuildFile,
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion());
+                version = Utils.parseVersionReleaseSerial(repository);
+                name = Utils.parseMeadPkgName(repository);
+                log.info("Found version: {}", version);
+            } else {
+                ArtifactRef artifactRef = SimpleArtifactRef.parse(gavOverride);
+                lastMeadBuild = new BuildInfo();
+                lastMeadBuild.setExtra(new Extra());
+                lastMeadBuild.getExtra().setTypeinfo(new Typeinfo());
+                lastMeadBuild.getExtra().getTypeinfo().setMaven(new Maven());
+                lastMeadBuild.getExtra().getTypeinfo().getMaven().setGroupId(artifactRef.getGroupId());
+                lastMeadBuild.getExtra().getTypeinfo().getMaven().setArtifactId(artifactRef.getArtifactId());
+                lastMeadBuild.getExtra().getTypeinfo().getMaven().setVersion(artifactRef.getVersionString());
+                version = artifactRef.getVersionString();
+                name = artifactRef.getGroupId() + "-" + artifactRef.getArtifactId();
+                log.info(
+                        "Using override with GAV {} and name {}",
+                        artifactRef,
+                        name);
+            }
             // We want to ensure the artifact names are completely unique. Unlike in brew if
             // we build multiple branches they still need to be differentiated.
-            // TODO: Decide on the best way to differentiate. One option ends up as
-            //           org.jboss.pnc.rpm : org.apache.sshd-sshd-jb-eap-7.4-rhel-7
-            //       Another (currently chosen) also uses the groupId e.g.
-            //           org.jboss.pnc.rpm.org.apache.sshd : sshd-jb-eap-7.4-rhel-7
-            //       Latter needs NVR -> GAV conversion
-            String groupId = "org.jboss.pnc.rpm." + lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId();
-            String artifactId = lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId() + "-" + branch;
+            //
+            // Previously we used a prefix e.g. org.jboss.pnc.rpm.org.apache.sshd : sshd-jb-eap-7.4-rhel-7
+            // but we've now moved to using a single suffix and also replacing any '.' in the branch
+            // name to ensure it complies with maven standards.
+            String groupId = lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId();
+            String artifactId = lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId() + "-rpm-"
+                    + branch.replace(".", "-");
             log.info(
-                    "Setting groupId : artifactId to comprise of scoped groupId and branch name: {}:{}",
+                    "Setting groupId : artifactId to comprise of: {}:{}",
                     groupId,
                     artifactId);
 
-            BuildInfo lastMeadBuildForDeps = lastMeadBuild;
-            if (lastMeadBuildOverride != null) {
-                ArtifactRef artifactRef = SimpleArtifactRef.parse(lastMeadBuildOverride);
-                lastMeadBuildForDeps = new BuildInfo();
-                lastMeadBuildForDeps.setExtra(new Extra());
-                lastMeadBuildForDeps.getExtra().setTypeinfo(new Typeinfo());
-                lastMeadBuildForDeps.getExtra().getTypeinfo().setMaven(new Maven());
-                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setGroupId(artifactRef.getGroupId());
-                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setArtifactId(artifactRef.getArtifactId());
-                lastMeadBuildForDeps.getExtra().getTypeinfo().getMaven().setVersion(artifactRef.getVersionString());
-                version = artifactRef.getVersionString();
-                log.info(
-                        "Overriding lastMeadBuild with {} and version to {}",
-                        artifactRef,
-                        version);
-            }
-            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuildForDeps);
-
-            TagInfo tagInfo = MAPPER.readValue(
-                    Brew.getTagInfo(branch + "-build"),
-                    TagInfo.class);
+            List<SimpleArtifactRef> dependencies = getDependencies(pncConfig, pncConfiguration, lastMeadBuild);
 
             String source = Utils.readTemplate();
 
@@ -300,7 +332,7 @@ public class App implements Runnable {
             // brings in quite a lot.
             Document document = Document.of(source);
             PomEditor pomEditor = new PomEditor(document);
-            pomEditor.findChildElement(pomEditor.root(), NAME).textContent(Utils.parseMeadPkgName(repository));
+            pomEditor.findChildElement(pomEditor.root(), NAME).textContent(name);
             pomEditor.findChildElement(pomEditor.root(), GROUP_ID).textContent(groupId);
             pomEditor.findChildElement(pomEditor.root(), ARTIFACT_ID).textContent(artifactId);
             // TODO: Should we have the RPM build match the version of the wrapped build? It bears
@@ -350,7 +382,7 @@ public class App implements Runnable {
                 }
             });
 
-            updateMacros(pomEditor, plugins, tagInfo);
+            updateMacros(pomEditor, plugins, macros);
 
             Files.writeString(target.toPath(), pomEditor.toXml());
 
@@ -361,7 +393,7 @@ public class App implements Runnable {
         }
     }
 
-    void updateMacros(PomEditor pomEditor, Element plugins, TagInfo tagInfo) {
+    void updateMacros(PomEditor pomEditor, Element plugins, Macros macros) {
         // findFirst as the template only has one plugin with this artifactId
         var plugin = plugins.children()
                 .filter(
@@ -371,16 +403,8 @@ public class App implements Runnable {
                 .findFirst();
         // We know the template is a specific format so don't need to use isPresent.
         @SuppressWarnings("OptionalGetWithoutIsPresent")
-        Element macros = plugin.get().child("configuration").get().child("macros").get();
-        if (isNotEmpty(tagInfo.getExtra().getRhpkgSclPrefix())) {
-            pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRhpkgSclPrefix());
-        }
-        if (isNotEmpty(tagInfo.getExtra().getRpmMacroScl())) {
-            pomEditor.insertMavenElement(macros, "scl", tagInfo.getExtra().getRpmMacroScl());
-        }
-        if (isNotEmpty(tagInfo.getExtra().getRpmMacroDist())) {
-            pomEditor.insertMavenElement(macros, "dist", tagInfo.getExtra().getRpmMacroDist());
-        }
+        Element macroElement = plugin.get().child("configuration").get().child("macros").get();
+        macros.allMacros().forEach((k, v) -> pomEditor.insertMavenElement(macroElement, k, v));
     }
 
     String injectSourcesMacro(Optional<SimpleArtifactRef> projectSources, String source) {
@@ -406,7 +430,10 @@ public class App implements Runnable {
         // string replace.
         try (Stream<Path> stream = Files.walk(repository, 1)) {
             var r = stream.filter(m -> m.toFile().getName().endsWith(".spec")).toList();
-            if (r.size() > 1) {
+            // TODO: Should these first two cases be an error condition?
+            if (r.isEmpty()) {
+                log.error("No spec file found in {}", repository);
+            } else if (r.size() > 1) {
                 log.error("Multiple spec files found: {}", r);
             } else {
                 log.info("Replacing template.spec marker with: {}", r.getFirst().toFile().getName());
