@@ -1,13 +1,5 @@
 package org.jboss.pnc.rpm.importer.utils;
 
-import io.smallrye.common.process.ProcessBuilder;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.EmptyCommitException;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.lib.TextProgressMonitor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
@@ -18,6 +10,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.EmptyCommitException;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.TextProgressMonitor;
 import org.jboss.pnc.rpm.importer.model.brew.BuildInfo;
