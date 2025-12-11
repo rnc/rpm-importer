@@ -70,9 +70,9 @@
                         def spec = new File("${project.build.directory}/spec/template.spec")
                         def contents = spec.getText('UTF-8')
 
-                        // Spec Manipulation Example:
-                        // Apache-SSH source hack to ensure subdirectory creation is correctly named.
-                        // contents = contents.replaceAll("%setup -q -n sshd-", "%setup -q -n apache-sshd-")
+                        // Note: This spec manipulation makes the assumption that it follows the standard
+                        // format with the meadversion (etc) variables and a Sources100 marker that is used
+                        // by a block like "%setup -q -n 'package-name'-%{namedversion} -T -b 100"
 
                         contents = """
 %global meadversion ${meadversion}
@@ -85,7 +85,8 @@
 %if %with mead
 Source100:
 %endif
-                        """ + contents
+
+""" + contents
                         spec.write(contents)</groovyPatch>
         </configuration>
       </plugin>
