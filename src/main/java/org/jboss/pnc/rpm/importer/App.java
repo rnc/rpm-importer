@@ -46,6 +46,7 @@ import org.jboss.pnc.dto.SCMRepository;
 import org.jboss.pnc.dto.requests.CreateAndSyncSCMRequest;
 import org.jboss.pnc.dto.response.Page;
 import org.jboss.pnc.dto.response.RepositoryCreationResponse;
+import org.jboss.pnc.mavenmanipulator.common.util.ManifestUtils;
 import org.jboss.pnc.rpm.importer.clients.OrchService;
 import org.jboss.pnc.rpm.importer.clients.ReqourService;
 import org.jboss.pnc.rpm.importer.model.Macros;
@@ -314,6 +315,12 @@ public class App implements Runnable {
 
             source = updateSpecName(source);
 
+            source = source
+                    .replace(
+                            "Generated using ",
+                            "Generated using RPM-Importer " + ManifestUtils.getManifestInformation(App.class)
+                                    + " from PNC build " + lastMeadBuild.getExtra().getExternalBuildId() + " ");
+
             // Replace the Source100 marker in the template. Easier to do via string
             // replace rather than searching for the element.
             Optional<SimpleArtifactRef> projectSources = dependencies.stream()
@@ -476,6 +483,7 @@ public class App implements Runnable {
                 return Collections.emptyList();
             }
             String buildId = artifact.getBuild().getId();
+            lastMeadBuild.getExtra().setExternalBuildId(buildId);
             log.debug(
                     "For artifact {} found artifactId {} with buildId {}",
                     lastMeadBuild.getExtra().getTypeinfo().getMaven(),

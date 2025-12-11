@@ -25,6 +25,7 @@ import org.jboss.pnc.bacon.auth.client.PncClientHelper;
 import org.jboss.pnc.bacon.config.Config;
 import org.jboss.pnc.bacon.config.ConfigProfile;
 import org.jboss.pnc.bacon.config.PncConfig;
+import org.jboss.pnc.mavenmanipulator.common.util.ManifestUtils;
 import org.jboss.pnc.rpm.importer.model.Macros;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -131,7 +132,8 @@ class AppTest {
             //            File spec = new File(tempDir.toString(), "example.spec");
             //            spec.createNewFile();
             try (MockedStatic<Config> mockConfig = mockStatic(Config.class);
-                    MockedStatic<PncClientHelper> mockPncClientHelper = mockStatic(PncClientHelper.class)) {
+                    MockedStatic<PncClientHelper> mockPncClientHelper = mockStatic(PncClientHelper.class);
+                    MockedStatic<ManifestUtils> mockManifestUtils = mockStatic(ManifestUtils.class)) {
                 Config config = new Config();
                 ConfigProfile profile = new ConfigProfile();
                 PncConfig pncConfig = new PncConfig();
@@ -139,6 +141,7 @@ class AppTest {
                 config.setActiveProfile(profile);
                 mockConfig.when(Config::instance).thenReturn(config);
                 mockPncClientHelper.when(PncClientHelper::getPncConfiguration).thenReturn(null);
+                mockManifestUtils.when(() -> ManifestUtils.getManifestInformation(App.class)).thenReturn("DEV-VERSION");
 
                 app.run();
             }
@@ -152,6 +155,9 @@ class AppTest {
                                     r -> LogCollectingTestResource.format(r)
                                             .contains(
                                                     "Setting groupId : artifactId to comprise of: com.google.guava:guava-parent-rpm-jb-eap-8-0-rhel-9")));
+
+            Path pom = Path.of(tempDir.toString(), "pom.xml");
+            assertTrue(Files.readString(pom).contains("Generated using RPM-Importer DEV-VERSION from PNC build null"));
         }
     }
 }
