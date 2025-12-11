@@ -216,6 +216,14 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>buildnumber-maven-plugin</artifactId>
+        <configuration>
+          <shortRevisionLength>8</shortRevisionLength>
+          <timestampFormat>{0,date,dd MMMM yyyy}</timestampFormat>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.sonatype.central</groupId>
         <artifactId>central-publishing-maven-plugin</artifactId>
         <version>0.9.0</version>
@@ -229,6 +237,15 @@
         <artifactId>quarkus-maven-plugin</artifactId>
         <version>${quarkus.platform.version}</version>
         <extensions>true</extensions>
+        <configuration>
+          <manifestEntries>
+            <Implementation-URL>${project.url}</Implementation-URL>
+            <Java-Version>${java.version}</Java-Version>
+            <Scm-Url>${project.scm.url}</Scm-Url>
+            <Scm-Connection>${project.scm.connection}</Scm-Connection>
+            <Scm-Revision>${buildNumber}</Scm-Revision>
+          </manifestEntries>
+        </configuration>
         <executions>
           <execution>
             <goals>
