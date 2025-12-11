@@ -1,9 +1,12 @@
 package org.jboss.pnc.rpm.importer.utils;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.logging.LogRecord;
@@ -44,8 +47,7 @@ class UtilsTest {
         Path result = Utils.cloneRepository("https://github.com/project-ncl/rpm-importer.git", "main");
 
         File pom = new File(result.toString(), "pom.xml");
-        //noinspection ResultOfMethodCallIgnored
-        pom.createNewFile();
+        Files.write(pom.toPath(), List.of("The first line"), StandardCharsets.UTF_8);
 
         Utils.commitAndPushRepository(result, false);
 
@@ -54,6 +56,19 @@ class UtilsTest {
         assertTrue(
                 logRecords.stream()
                         .anyMatch(r -> LogCollectingTestResource.format(r).contains("Added and committed pom.xml")));
+    }
+
+    @Test
+    void testEmptyCommit() throws IOException {
+        Path result = Utils.cloneRepository("https://github.com/project-ncl/rpm-importer.git", "main");
+
+        Utils.commitAndPushRepository(result, false);
+
+        List<LogRecord> logRecords = LogCollectingTestResource.current().getRecords();
+
+        assertTrue(
+                logRecords.stream()
+                        .anyMatch(r -> LogCollectingTestResource.format(r).contains("Nothing to commit")));
     }
 
     @Test
