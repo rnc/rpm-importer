@@ -59,7 +59,7 @@
       <plugin>
         <groupId>org.jboss.pnc</groupId>
         <artifactId>rpm-builder-maven-plugin</artifactId>
-        <version>1.3</version>
+        <version>1.4</version>
         <extensions>true</extensions>
         <configuration>
           <!-- Insert macros to be used at RPM build time -->
