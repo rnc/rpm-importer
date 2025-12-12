@@ -1,6 +1,6 @@
 package org.jboss.pnc.rpm.importer;
 
-import org.commonjava.maven.ext.common.util.ManifestUtils;
+import org.jboss.pnc.mavenmanipulator.common.util.ManifestUtils;
 
 import picocli.CommandLine;
 
