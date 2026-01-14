@@ -15,7 +15,7 @@ The advantages over manually cloning within the PNC UI and hand-crafting the pom
 * The pom file is created with a unique GAV - specifically -
    * The groupId defaults to the wrapper build's groupId.
    * The artifactId defaults to the wrapped build's artifactId combined with the indicator `rpm` and branch name e.g. `guava-parent-rpm-jb-eap-8.0-rhel-9`
-   * The version defaults to `1.0.0`
+   * The version defaults to the original version (without the redhat suffix). Note in prior versions it was `1.0.0`.
    * Note in prior versions the prefix `org.jboss.pnc.rpm` was prepended to the wrapper build's groupId.
 * The artifacts from the wrapped build are all included in the pom file. The tool interrogates PNC to find the last build and grab all the artifacts. Note that not all of the artifacts may be used by the spec file so it is possible to optimise further by hand-crafting at this point.
 
@@ -39,15 +39,17 @@ Brew access via Kerberos is also required **unless** you override both the Brew 
 Options:
 
 ```
-Usage: rpm-importer [-hvV] [--overwrite] [--push] [--skip-sync] [--branch=<branch>] [-p=<configPath>] [--profile=<profile>] [--repository=<repository>]
-                    --url=<url>
+Usage: rpm-importer [-hvV] [--overwrite] [--push] [--skip-sync] --branch=<branch> [-p=<configPath>] [--profile=<profile>] [--repository=<repository>]
+                    --url=<url> [--macros=<String=String>]... [--gav=<gavOverride> --originalVersion=<originalVersionOverride>]
 
       --branch=<branch>     Branch in git repository
       --gav, --lastMeadBuild=<gavOverride>
-                            Override the value found from last-mead-build. Accepts a Maven GAV.
+                            Override the value found from last-mead-build. Accepts a Maven GAV with RH version.
   -h, --help                Show this help message and exit.
       --macros=<String=String>
                             Pass in a (comma separated) set of macros to use
+      --originalVersion=<originalVersionOverride>
+                            Supply the original version (without the RH version)
       --overwrite           Overwrites existing pom. Dangerous!
   -p, --configPath=<configPath>
                             Path to PNC configuration folder
@@ -73,5 +75,5 @@ Notes:
 * Unless `--push` is supplied the tool will only commit changes locally and **not** push to the remote. It is highly recommended that the user checks the resulting `pom.xml` before _manually_ running any git push.
 * Skipping repository syncing only makes sense if the repository has already been mirrored to GitLab. This might be the case if the user is switching between multiple branches or regenerating the pom.
 * Using an existing locally cloned repository is useful for local debugging or regenerating the pom.
-* It uses last-mead-build to retrieve the NVR and examine the Brew extra information and the typeinfo. If this typeinfo that contains a Maven GAV does not correspond to a valid type (which we have seen happen with Hibernate) then use lastMeadBuild to pass in a valid GAV from the build within PNC. It must be a GAV from a Red Hat build from PNC.
+* It uses last-mead-build to retrieve the NVR and examine the Brew extra information and the typeinfo. If this typeinfo that contains a Maven GAV does not correspond to a valid type (which we have seen happen with Hibernate) then use the `--gav` (or `--lastMeadBuild`) to pass in a valid GAV from the build within PNC. It must be a GAV from a Red Hat build from PNC. When using this option the `--originalGAV` must also be supplied.
 * If using `--gav`/`--lastMeadBuild` the GAV that is passed in **MUST** be the top level GAV in the build.
