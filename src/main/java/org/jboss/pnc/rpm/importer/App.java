@@ -56,6 +56,7 @@ import org.jboss.pnc.rpm.importer.model.brew.Maven;
 import org.jboss.pnc.rpm.importer.model.brew.TagInfo;
 import org.jboss.pnc.rpm.importer.model.brew.Typeinfo;
 import org.jboss.pnc.rpm.importer.utils.Brew;
+import org.jboss.pnc.rpm.importer.utils.ETT;
 import org.jboss.pnc.rpm.importer.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -271,7 +272,7 @@ public class App implements Runnable {
             if (overrideVersionOptions == null || overrideVersionOptions.gavOverride == null) {
                 // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
                 // brew we can obtain the GAV from the NVR.
-                String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
+                String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), ETT.LAST_MEAD_BUILD)).trim();
                 String buildInfo = Brew.getBuildInfo(lastMeadBuildFile);
                 lastMeadBuild = MAPPER.readValue(
                         buildInfo,
@@ -285,7 +286,8 @@ public class App implements Runnable {
                                     + " must be ported to PNC before attempting to wrap it in a RPM");
                 }
                 log.info(
-                        "Found last-mead-build {} with GAV {}:{}:{}",
+                        "Found {} {} with GAV {}:{}:{}",
+                        ETT.LAST_MEAD_BUILD,
                         lastMeadBuildFile,
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),

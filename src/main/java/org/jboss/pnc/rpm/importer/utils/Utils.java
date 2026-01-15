@@ -55,7 +55,7 @@ public class Utils {
      * @return a parsed String RH version
      */
     public static String parseNamedVersionFromVersionReleaseSerial(Path path) throws IOException {
-        String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
+        String found = Files.readString(Paths.get(path.toString(), ETT.VERSION_RELEASE_SERIAL)).trim();
         return found.split(" ")[1];
     }
 
@@ -73,7 +73,7 @@ public class Utils {
      * @return a parsed String original version
      */
     public static String parseOriginalVersionFromVersionReleaseSerial(Path path) throws IOException {
-        String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
+        String found = Files.readString(Paths.get(path.toString(), ETT.VERSION_RELEASE_SERIAL)).trim();
         String[] fields = found.split(" ");
         String namedVersion = fields[1];
         String namedVersionRel = fields[fields.length - 1];
@@ -100,7 +100,7 @@ public class Utils {
      * @return a parsed String version
      */
     public static String parseMeadPkgName(Path path) throws IOException {
-        String found = Files.readString(Paths.get(path.toString(), "mead-pkg-name")).trim();
+        String found = Files.readString(Paths.get(path.toString(), ETT.MEAD_PKG_NAME)).trim();
         return found.split(" ")[0];
     }
 

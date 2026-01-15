@@ -77,3 +77,7 @@ Notes:
 * Using an existing locally cloned repository is useful for local debugging or regenerating the pom.
 * It uses last-mead-build to retrieve the NVR and examine the Brew extra information and the typeinfo. If this typeinfo that contains a Maven GAV does not correspond to a valid type (which we have seen happen with Hibernate) then use the `--gav` (or `--lastMeadBuild`) to pass in a valid GAV from the build within PNC. It must be a GAV from a Red Hat build from PNC. When using this option the `--originalGAV` must also be supplied.
 * If using `--gav`/`--lastMeadBuild` the GAV that is passed in **MUST** be the top level GAV in the build.
+* It uses the following files from ETT when generating the POM:
+  * `last-mead-build`
+  * `mead-pkg-name`
+  * `version-release-serial`
