@@ -67,6 +67,7 @@ import eu.maveniverse.domtrip.Element;
 import eu.maveniverse.domtrip.maven.PomEditor;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
+import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Option;
 
 /**
@@ -126,10 +127,22 @@ public class App implements Runnable {
             description = "Pushes changes to the remote repository. Will still commit")
     private boolean push;
 
-    @Option(
-            names = { "--lastMeadBuild", "--gav" },
-            description = "Override the value found from last-mead-build. Accepts a Maven GAV.")
-    String gavOverride;
+    @ArgGroup(exclusive = false)
+    OverrideVersionOptions overrideVersionOptions;
+
+    static class OverrideVersionOptions {
+        @Option(
+                names = { "--lastMeadBuild", "--gav" },
+                description = "Override the value found from last-mead-build. Accepts a Maven GAV with RH version.",
+                required = true)
+        String gavOverride;
+
+        @Option(
+                names = { "--originalVersion" },
+                description = "Supply the original version (without the RH version)",
+                required = true)
+        String originalVersionOverride;
+    }
 
     @Option(
             names = "--macros",
@@ -233,6 +246,7 @@ public class App implements Runnable {
             BuildInfo lastMeadBuild;
             String version;
             String name;
+            String originalVersion;
 
             if (customMacros == null) {
                 customMacros = new HashMap<>();
@@ -254,7 +268,7 @@ public class App implements Runnable {
             }
             Macros macros = new Macros(customMacros);
 
-            if (gavOverride == null) {
+            if (overrideVersionOptions == null || overrideVersionOptions.gavOverride == null) {
                 // While we have the last-mead-build value this is not reversible into a GAV. However if we call onto
                 // brew we can obtain the GAV from the NVR.
                 String lastMeadBuildFile = Files.readString(Paths.get(repository.toString(), "last-mead-build")).trim();
@@ -276,11 +290,12 @@ public class App implements Runnable {
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
                         lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion());
-                version = Utils.parseVersionReleaseSerial(repository);
+                version = Utils.parseNamedVersionFromVersionReleaseSerial(repository);
                 name = Utils.parseMeadPkgName(repository);
-                log.info("Found version: {}", version);
+                originalVersion = Utils.parseOriginalVersionFromVersionReleaseSerial(repository);
+                log.info("Found version: {} and original version: {}", version, originalVersion);
             } else {
-                ArtifactRef artifactRef = SimpleArtifactRef.parse(gavOverride);
+                ArtifactRef artifactRef = SimpleArtifactRef.parse(overrideVersionOptions.gavOverride);
                 lastMeadBuild = new BuildInfo();
                 lastMeadBuild.setExtra(new Extra());
                 lastMeadBuild.getExtra().setTypeinfo(new Typeinfo());
@@ -289,11 +304,13 @@ public class App implements Runnable {
                 lastMeadBuild.getExtra().getTypeinfo().getMaven().setArtifactId(artifactRef.getArtifactId());
                 lastMeadBuild.getExtra().getTypeinfo().getMaven().setVersion(artifactRef.getVersionString());
                 version = artifactRef.getVersionString();
+                originalVersion = overrideVersionOptions.originalVersionOverride;
                 name = artifactRef.getGroupId() + "-" + artifactRef.getArtifactId();
                 log.info(
-                        "Using override with GAV {} and name {}",
+                        "Using override with GAV {} and name {} and original version {}",
                         artifactRef,
-                        name);
+                        name,
+                        originalVersion);
             }
             // We want to ensure the artifact names are completely unique. Unlike in brew if
             // we build multiple branches they still need to be differentiated.
@@ -342,9 +359,8 @@ public class App implements Runnable {
             pomEditor.findChildElement(pomEditor.root(), NAME).textContent(name);
             pomEditor.findChildElement(pomEditor.root(), GROUP_ID).textContent(groupId);
             pomEditor.findChildElement(pomEditor.root(), ARTIFACT_ID).textContent(artifactId);
-            // TODO: Should we have the RPM build match the version of the wrapped build? It bears
-            //     no relation so I think should be distinct.
-            pomEditor.findChildElement(pomEditor.root(), VERSION).textContent("1.0.0");
+            pomEditor.findChildElement(pomEditor.root(), VERSION)
+                    .textContent(originalVersion);
             pomEditor.findChildElement(pomEditor.findChildElement(pomEditor.root(), PROPERTIES), "wrappedBuild")
                     .textContent(version);
             Element depMgmt = pomEditor.findChildElement(pomEditor.root(), DEPENDENCY_MANAGEMENT);
@@ -458,6 +474,14 @@ public class App implements Runnable {
         // build. I think this is currently only possible by retrieving the artifactId for the GAV,
         // then the artifact for that Id and finally using the buildId from the previous, retrieve all
         // built artifacts.
+        log.debug(
+                "Calling orch with {}",
+                String.format(
+                        "%s:%s:%s:%s",
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getGroupId(),
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getArtifactId(),
+                        "pom",
+                        lastMeadBuild.getExtra().getTypeinfo().getMaven().getVersion()));
         var allArtifacts = orchService.getArtifactsFiltered(
                 pncConfig.getUrl(),
                 pncConfiguration.getBearerTokenSupplier().get(),

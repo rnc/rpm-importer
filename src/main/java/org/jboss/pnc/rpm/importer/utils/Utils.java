@@ -54,9 +54,37 @@ public class Utils {
      * @param path the directory where the ETT files are
      * @return a parsed String RH version
      */
-    public static String parseVersionReleaseSerial(Path path) throws IOException {
+    public static String parseNamedVersionFromVersionReleaseSerial(Path path) throws IOException {
         String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
         return found.split(" ")[1];
+    }
+
+    /**
+     * The format of the file is
+     *
+     * <pre>
+     * {@code <meadversion> <namedversion> <meadalpha> <meadrel> <serial> <namedversionrel>}
+     * </pre>
+     *
+     * Returns the original version by subtracting the final field (namedversionrel) and one extra
+     * character from the namedversion.
+     *
+     * @param path the directory where the ETT files are
+     * @return a parsed String original version
+     */
+    public static String parseOriginalVersionFromVersionReleaseSerial(Path path) throws IOException {
+        String found = Files.readString(Paths.get(path.toString(), "version-release-serial")).trim();
+        String[] fields = found.split(" ");
+        String namedVersion = fields[1];
+        String namedVersionRel = fields[fields.length - 1];
+        // Subtract the final field and 1 extra character (the separator) from the named version
+        String suffix = "." + namedVersionRel;
+        if (namedVersion.matches(".*" + suffix + "$")) {
+            return namedVersion.substring(0, namedVersion.length() - suffix.length());
+        }
+        log.error("Found namedVersion {} and suffix {} ", namedVersion, suffix);
+        throw new RuntimeException(
+                "Invalid version-release-serial format; unable to determine original version from " + found);
     }
 
     /**
@@ -111,7 +139,6 @@ public class Utils {
             jGit.add().addFilepattern("pom.xml").call();
             var revCommit = jGit.commit()
                     .setNoVerify(true)
-                    .setAuthor("ProjectNCL", "")
                     .setMessage("RPM-Importer - POM Generation")
                     .setAllowEmpty(false)
                     .call();

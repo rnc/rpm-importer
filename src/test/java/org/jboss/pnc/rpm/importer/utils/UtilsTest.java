@@ -1,10 +1,12 @@
 package org.jboss.pnc.rpm.importer.utils;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +15,7 @@ import java.util.logging.LogRecord;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.quarkus.test.LogCollectingTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -88,5 +91,48 @@ class UtilsTest {
                         <groupId>org.jboss.pnc</groupId>
                         <artifactId>rpm-builder-maven-plugin</artifactId>
                 """));
+    }
+
+    @Test
+    void testParseNamedVersionFromVersionReleaseSerial(@TempDir Path tempDir) throws IOException {
+        // Load the test resource file
+        InputStream resourceStream = UtilsTest.class.getClassLoader()
+                .getResourceAsStream("version-release-serial");
+        assert resourceStream != null;
+        String resourceContent = new String(resourceStream.readAllBytes(), StandardCharsets.UTF_8);
+
+        // Write the resource file to the temporary directory
+        Path versionReleaseSerialFile = tempDir.resolve("version-release-serial");
+        Files.writeString(versionReleaseSerialFile, resourceContent);
+
+        // Call the method under test
+        String result = Utils.parseNamedVersionFromVersionReleaseSerial(tempDir);
+
+        // Assert the result - should be the second field (index 1) from the space-separated line
+        assertEquals("2.0.1.Final-redhat-00001", result);
+    }
+
+    @Test
+    void testParseOriginalVersionFromVersionReleaseSerial(@TempDir Path tempDir) throws IOException {
+        // Load the test resource file
+        InputStream resourceStream = UtilsTest.class.getClassLoader()
+                .getResourceAsStream("version-release-serial");
+        assert resourceStream != null;
+        String resourceContent = new String(resourceStream.readAllBytes(), StandardCharsets.UTF_8);
+
+        Path versionReleaseSerialFile = tempDir.resolve("version-release-serial");
+        Files.writeString(versionReleaseSerialFile, resourceContent);
+
+        String result = Utils.parseOriginalVersionFromVersionReleaseSerial(tempDir);
+        assertEquals("2.0.1.Final", result);
+
+        Files.writeString(
+                versionReleaseSerialFile,
+                resourceContent.replace("2.0.1.Final-redhat-00001", "2.0.1.redhat-00001"));
+
+        result = Utils.parseOriginalVersionFromVersionReleaseSerial(tempDir);
+
+        List<LogRecord> logRecords = LogCollectingTestResource.current().getRecords();
+        assertEquals("2.0.1", result);
     }
 }

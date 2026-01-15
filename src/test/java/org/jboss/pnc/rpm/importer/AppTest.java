@@ -124,7 +124,9 @@ class AppTest {
             app.customMacros = Collections.singletonMap("dist", "MY-CUSTOM-MACRO");
             app.repository = tempDir;
             app.branch = branch;
-            app.gavOverride = "com.google.guava:guava-parent:1.0";
+            app.overrideVersionOptions = new App.OverrideVersionOptions();
+            app.overrideVersionOptions.gavOverride = "com.google.guava:guava-parent:1.0.redhat-1";
+            app.overrideVersionOptions.originalVersionOverride = "1.0";
 
             // Mock getDependencies to return an empty list
             doReturn(Collections.emptyList()).when(app).getDependencies(any(), any(), any());
