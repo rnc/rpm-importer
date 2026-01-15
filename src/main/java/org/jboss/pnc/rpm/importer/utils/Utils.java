@@ -139,7 +139,6 @@ public class Utils {
             jGit.add().addFilepattern("pom.xml").call();
             var revCommit = jGit.commit()
                     .setNoVerify(true)
-                    .setAuthor("ProjectNCL", "")
                     .setMessage("RPM-Importer - POM Generation")
                     .setAllowEmpty(false)
                     .call();
